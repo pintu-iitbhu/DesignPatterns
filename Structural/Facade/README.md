@@ -13,7 +13,7 @@
 # Example: Facade Pattern in Java
 Let’s take an example of a Home Theater System that has several components like DVD Player, Amplifier, and Projector. The facade will provide a simple interface to operate all these components together.
 
-1. ## Subsystem Classes
+## 1. Subsystem Classes
 These classes represent the complex subsystem. The client could interact with them directly, but it's cumbersome.
 
 ```java
@@ -54,7 +54,7 @@ public class Projector {
 }
 ```
 
-2. ## Facade Class
+## 2. Facade Class
 The facade provides a simplified interface to control the entire home theater system.
 
 ```java
@@ -88,7 +88,7 @@ public class HomeTheaterFacade {
 }
 ```
 
-3. ## Client Code
+## 3. Client Code
 The client uses the facade to interact with the system, making the process easier and more intuitive.
 
 ```java

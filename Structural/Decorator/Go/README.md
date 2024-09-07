@@ -1,4 +1,4 @@
-# Example: Decorator Pattern in Java
+# Example: Decorator Pattern in Go
 
 Let’s say we have a basic Coffee class, and we want to add different kinds of add-ons to the coffee (like milk, sugar, etc.), but we want to do this dynamically, without modifying the Coffee class directly.
 

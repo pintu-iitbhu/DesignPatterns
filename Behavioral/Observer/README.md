@@ -56,6 +56,7 @@ public interface StockObservable {
     void Attach(NotificationAlertObserver observer);
     void Detach(NotificationAlertObserver observer);
     void Notify();
+    int getStockNumber();
 }
 ```
 

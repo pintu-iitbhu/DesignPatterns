@@ -1,0 +1,11 @@
+package com.rcpky.abstractfactory.cloud.aws;
+
+import com.rcpky.abstractfactory.cloud.Storage;
+
+public class S3Storage implements Storage {
+
+    @Override
+    public void upload(String fileName) {
+        System.out.println("Uploading to AWS S3: " + fileName);
+    }
+}

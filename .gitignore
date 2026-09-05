@@ -26,3 +26,7 @@
 
 # Logs
 **/*.log
+
+# Scratch/reference folders
+educative-code-widget-files/
+**/educative-code-widget-files/

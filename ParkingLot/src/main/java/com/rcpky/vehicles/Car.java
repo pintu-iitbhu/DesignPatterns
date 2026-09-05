@@ -1,4 +1,9 @@
 package com.rcpky.vehicles;
 
-public class Car {
+public class Car extends Vehicle {
+    public Car(String lic)
+    {
+        super(lic);
+    }
 }
+

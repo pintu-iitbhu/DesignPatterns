@@ -1,6 +1,6 @@
 package com.rcpky.structural.odercheckout.services;
 
-import com.rcpky.creational.ordercreation.OrderItem;
+import com.rcpky.creational.builder.ordercreation.OrderItem;
 
 import java.util.List;
 

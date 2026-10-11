@@ -1,7 +1,7 @@
 package com.rcpky.structural.odercheckout;
 
-import com.rcpky.creational.ordercreation.Address;
-import com.rcpky.creational.ordercreation.OrderItem;
+import com.rcpky.creational.builder.ordercreation.Address;
+import com.rcpky.creational.builder.ordercreation.OrderItem;
 import com.rcpky.structural.odercheckout.services.InventoryService;
 import com.rcpky.structural.odercheckout.services.NotificationService;
 import com.rcpky.structural.odercheckout.services.PaymentService;

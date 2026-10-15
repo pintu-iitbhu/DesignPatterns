@@ -1,4 +1,4 @@
-package com.rcpky.structural.odercheckout;
+package com.rcpky.structural.facade.odercheckout;
 
 public class ShippingResult {
 }

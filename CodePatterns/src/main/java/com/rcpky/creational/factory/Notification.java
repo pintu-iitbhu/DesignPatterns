@@ -1,4 +1,4 @@
 package com.rcpky.creational.factory;
 
-public class Notification {
+public interface Notification {
 }

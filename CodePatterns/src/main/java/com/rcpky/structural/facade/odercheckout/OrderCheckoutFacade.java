@@ -1,11 +1,11 @@
-package com.rcpky.structural.odercheckout;
+package com.rcpky.structural.facade.odercheckout;
 
 import com.rcpky.creational.builder.ordercreation.Address;
 import com.rcpky.creational.builder.ordercreation.OrderItem;
-import com.rcpky.structural.odercheckout.services.InventoryService;
-import com.rcpky.structural.odercheckout.services.NotificationService;
-import com.rcpky.structural.odercheckout.services.PaymentService;
-import com.rcpky.structural.odercheckout.services.ShippingService;
+import com.rcpky.structural.facade.odercheckout.services.InventoryService;
+import com.rcpky.structural.facade.odercheckout.services.NotificationService;
+import com.rcpky.structural.facade.odercheckout.services.PaymentService;
+import com.rcpky.structural.facade.odercheckout.services.ShippingService;
 
 import java.math.BigDecimal;
 import java.util.List;

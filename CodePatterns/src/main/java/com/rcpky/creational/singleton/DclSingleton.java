@@ -10,6 +10,7 @@ public class DclSingleton {
 
     }
 
+    // double locking
     public static DclSingleton getInstance() {
         if (instance == null) {
             synchronized (DclSingleton .class) {

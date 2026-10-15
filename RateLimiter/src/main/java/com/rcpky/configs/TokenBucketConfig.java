@@ -1,4 +1,4 @@
-package com.rcpky;
+package com.rcpky.configs;
 
 public record TokenBucketConfig(int capacity, int refillTokens, long refillPeriodMillis) implements RateLimitConfig {
 

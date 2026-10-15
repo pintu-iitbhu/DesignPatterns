@@ -1,8 +1,8 @@
-package com.rcpky.structural.odercheckout.services;
+package com.rcpky.structural.facade.odercheckout.services;
 
 import com.rcpky.creational.builder.ordercreation.Address;
 import com.rcpky.creational.builder.ordercreation.OrderItem;
-import com.rcpky.structural.odercheckout.ShippingResult;
+import com.rcpky.structural.facade.odercheckout.ShippingResult;
 
 import java.util.List;
 

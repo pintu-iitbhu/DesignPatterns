@@ -1,4 +1,4 @@
-package com.rcpky;
+package com.rcpky.configs;
 
 public interface RateLimitConfig {
     int limit();

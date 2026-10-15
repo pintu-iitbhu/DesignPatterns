@@ -1,5 +1,8 @@
-package com.rcpky;
+package com.rcpky.algo;
 
-public interface RateLimitAlgorithm {
-    RateLimitResult tryAcquire(String key, RateLimitConfig config, long nowMillis);
+import com.rcpky.configs.RateLimitConfig;
+import com.rcpky.models.RateLimitResult;
+
+public interface RateLimitAlgorithm<C extends RateLimitConfig> {
+    RateLimitResult tryAcquire(String key, C config, long nowMillis);
 }

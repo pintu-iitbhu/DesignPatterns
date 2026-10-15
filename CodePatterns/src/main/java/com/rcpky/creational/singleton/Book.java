@@ -8,6 +8,10 @@ public class Book {
 
     }
 
+    private  static class BookHolder{
+        private static final Book INSTANCE = new Book();
+    }
+
     ///  we have synchronization problem here
     public static Book getInstance() {
         if (instance == null) {
@@ -24,4 +28,8 @@ public class Book {
         }
         return  instance;
     }
+
+
+
+
 }

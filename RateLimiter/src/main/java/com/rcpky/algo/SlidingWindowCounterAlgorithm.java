@@ -1,33 +1,29 @@
-package com.rcpky;
+package com.rcpky.algo;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import com.rcpky.configs.SlidingWindowConfig;
+import com.rcpky.models.RateLimitResult;
+import com.rcpky.models.WindowState;
+import com.rcpky.store.StateStore;
 
-public class SlidingWindowCounterAlgorithm
-        implements RateLimitAlgorithm {
+import java.util.concurrent.atomic.AtomicReference;
+// import java.util.concurrent.ConcurrentHashMap;
+// import java.util.concurrent.ConcurrentMap;
 
-    private record WindowState(
-            long windowId,
-            long previousCount,
-            long currentCount
-    ) {}
+public class SlidingWindowCounterAlgorithm implements RateLimitAlgorithm<SlidingWindowConfig> {
 
-    private final ConcurrentMap<String, WindowState> windows =
-            new ConcurrentHashMap<>();
+    private final StateStore<WindowState> store;
+    // private final ConcurrentMap<String, WindowState> windows = new ConcurrentHashMap<>(); // Q2: unbounded heap growth
+
+    public SlidingWindowCounterAlgorithm(StateStore<WindowState> store) {
+        this.store = store;
+    }
 
     @Override
-    public RateLimitResult tryAcquire(
-            String key,
-            RateLimitConfig config,
-            long nowMillis
-    ) {
-        if (!(config instanceof SlidingWindowConfig policy)) {
-            throw new IllegalArgumentException("SlidingWindowConfig required");
-        }
+    public RateLimitResult tryAcquire(String key, SlidingWindowConfig policy, long nowMillis) {
+        // final RateLimitResult[] result = new RateLimitResult[1]; // Q3: array trick — workaround for lambda effectively-final constraint
+        AtomicReference<RateLimitResult> result = new AtomicReference<>();
 
-        final RateLimitResult[] result = new RateLimitResult[1];
-
-        windows.compute(key, (ignored, oldState) -> {
+        store.compute(key, (ignored, oldState) -> {
             long windowId = nowMillis / policy.windowMillis();
 
             long previousCount = 0;
@@ -62,18 +58,20 @@ public class SlidingWindowCounterAlgorithm
                         (int) Math.floor(policy.limit() - updatedCount)
                 );
 
-                result[0] = new RateLimitResult(true, remaining, 0);
+                // result[0] = new RateLimitResult(true, remaining, 0);
+                result.set(new RateLimitResult(true, remaining, 0));
             } else {
                 long retryAfter = Math.max(
                         1,
                         policy.windowMillis() - elapsed
                 );
 
-                result[0] = new RateLimitResult(
+                // result[0] = new RateLimitResult(false, 0, retryAfter);
+                result.set(new RateLimitResult(
                         false,
                         0,
                         retryAfter
-                );
+                ));
             }
 
             return new WindowState(
@@ -83,6 +81,7 @@ public class SlidingWindowCounterAlgorithm
             );
         });
 
-        return result[0];
+        // return result[0];
+        return result.get();
     }
 }

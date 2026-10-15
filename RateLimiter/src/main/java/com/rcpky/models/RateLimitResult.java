@@ -1,4 +1,4 @@
-package com.rcpky;
+package com.rcpky.models;
 
 public record RateLimitResult(
         boolean allowed,

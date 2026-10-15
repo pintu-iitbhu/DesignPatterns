@@ -1,4 +1,4 @@
-package com.rcpky.structural.odercheckout.services;
+package com.rcpky.structural.facade.odercheckout.services;
 
 public class NotificationService {
 

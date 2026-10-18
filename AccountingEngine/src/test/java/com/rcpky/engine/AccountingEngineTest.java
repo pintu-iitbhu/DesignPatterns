@@ -3,8 +3,10 @@ package com.rcpky.engine;
 import com.rcpky.action.*;
 import com.rcpky.builder.RuleBuilder;
 import com.rcpky.condition.*;
+import com.rcpky.domain.PaymentMethod;
 import com.rcpky.domain.RiskLevel;
 import com.rcpky.domain.Transaction;
+import com.rcpky.domain.TransactionStatus;
 import com.rcpky.domain.TransactionType;
 import com.rcpky.repository.InMemoryRuleRepository;
 import com.rcpky.repository.RuleRepository;
@@ -29,7 +31,8 @@ class AccountingEngineTest {
     }
 
     private Transaction tx(String id, BigDecimal amount, TransactionType type, String merchantId) {
-        return new Transaction(id, "ACC001", merchantId, amount, "USD", type, Instant.now(), Map.of());
+        return new Transaction(id, "ACC001", merchantId, amount, "USD", type,
+                PaymentMethod.CARD, TransactionStatus.COMPLETED, Instant.now(), Map.of());
     }
 
     @Test

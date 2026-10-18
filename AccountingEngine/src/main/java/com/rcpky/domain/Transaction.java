@@ -11,6 +11,8 @@ public record Transaction(
         BigDecimal amount,
         String currency,
         TransactionType type,
+        PaymentMethod paymentMethod,
+        TransactionStatus status,
         Instant timestamp,
         Map<String, Object> metadata
 ) {}

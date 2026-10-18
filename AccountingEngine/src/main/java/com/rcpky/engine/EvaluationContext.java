@@ -1,5 +1,7 @@
 package com.rcpky.engine;
 
+import com.rcpky.ledger.LedgerEntry;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -13,6 +15,7 @@ public class EvaluationContext {
     private final Set<String> flags = new HashSet<>();
     private final Set<String> categories = new HashSet<>();
     private final List<RuleResult> ruleResults = new ArrayList<>();
+    private final List<LedgerEntry> ledgerEntries = new ArrayList<>();
 
     public void addScore(int delta) {
         this.totalScore += delta;
@@ -41,4 +44,7 @@ public class EvaluationContext {
     public Set<String> flags() { return Set.copyOf(flags); }
     public Set<String> categories() { return Set.copyOf(categories); }
     public List<RuleResult> ruleResults() { return List.copyOf(ruleResults); }
+
+    public void addLedgerEntry(LedgerEntry entry) { this.ledgerEntries.add(entry); }
+    public List<LedgerEntry> ledgerEntries() { return List.copyOf(ledgerEntries); }
 }

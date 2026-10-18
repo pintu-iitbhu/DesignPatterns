@@ -10,7 +10,10 @@ import com.rcpky.util.VcsUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
 import static org.junit.Assert.*;
+
 
 public class VcsTest {
 

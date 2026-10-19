@@ -33,6 +33,7 @@ class Subscription {
     private int offset;
     private volatile boolean active;
 
+
     Subscription(ISubscriber subscriber, MessageFilter filter) {
         this.subscriber = subscriber;
         this.filter = filter;

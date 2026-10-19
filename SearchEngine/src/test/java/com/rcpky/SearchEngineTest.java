@@ -1,10 +1,12 @@
 package com.rcpky;
 
+import com.rcpky.core.ISearchEngine;
 import com.rcpky.core.SearchEngine;
 import com.rcpky.model.Document;
+import com.rcpky.query.OrQueryStrategy;
+import com.rcpky.rank.RecencyRanker;
 import org.junit.Before;
 import org.junit.Test;
-
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -15,11 +17,13 @@ import static org.junit.Assert.*;
 
 public class SearchEngineTest {
 
-    private SearchEngine engine;
+    // Declared as ISearchEngine to verify tests compile against the interface contract.
+    private ISearchEngine engine;
 
     @Before
     public void setUp() {
-        engine = new SearchEngine();
+        // Default: SimpleTokenizer + AndQueryStrategy + NoOpRanker
+        engine = new SearchEngine.Builder().build();
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -209,5 +213,84 @@ public class SearchEngineTest {
         assertFalse(engine.searchByTag("unique-tag-abc").isEmpty());
         engine.removeDocument(id);
         assertTrue(engine.searchByTag("unique-tag-abc").isEmpty());
+    }
+
+    // ── OrQueryStrategy ───────────────────────────────────────────────────────
+
+    @Test
+    public void testOrQueryReturnsDocsWithAnyToken() {
+        ISearchEngine orEngine = new SearchEngine.Builder()
+                .queryStrategy(new OrQueryStrategy())
+                .build();
+        orEngine.addDocument("Java programming guide");
+        orEngine.addDocument("Python data science");
+        orEngine.addDocument("Ruby on Rails");
+
+        // "java" OR "python" — should match first two, not Ruby
+        List<Document> results = orEngine.search("java python");
+        assertEquals(2, results.size());
+        assertTrue(containsContent(results, "Java programming guide"));
+        assertTrue(containsContent(results, "Python data science"));
+    }
+
+    @Test
+    public void testOrQueryReturnsSingleMatch() {
+        ISearchEngine orEngine = new SearchEngine.Builder()
+                .queryStrategy(new OrQueryStrategy())
+                .build();
+        orEngine.addDocument("apple pie recipe");
+        orEngine.addDocument("orange juice");
+
+        // "apple" OR "blockchain" — only first doc matches
+        List<Document> results = orEngine.search("apple blockchain");
+        assertEquals(1, results.size());
+        assertTrue(containsContent(results, "apple pie recipe"));
+    }
+
+    @Test
+    public void testOrQueryNoMatchReturnsEmpty() {
+        ISearchEngine orEngine = new SearchEngine.Builder()
+                .queryStrategy(new OrQueryStrategy())
+                .build();
+        orEngine.addDocument("hello world");
+        assertTrue(orEngine.search("blockchain nft").isEmpty());
+    }
+
+    // ── RecencyRanker ─────────────────────────────────────────────────────────
+
+    @Test
+    public void testRecencyRankerOrdersNewestFirst() throws InterruptedException {
+        ISearchEngine recencyEngine = new SearchEngine.Builder()
+                .ranker(new RecencyRanker())
+                .build();
+
+        recencyEngine.addDocument("oldest programming article");
+        Thread.sleep(5); // ensure distinct timestamps
+        recencyEngine.addDocument("newer programming tutorial");
+        Thread.sleep(5);
+        recencyEngine.addDocument("newest programming trends");
+
+        List<Document> results = recencyEngine.search("programming");
+        assertEquals(3, results.size());
+        // Newest must appear first
+        assertEquals("newest programming trends", results.get(0).getContent());
+        assertEquals("oldest programming article", results.get(2).getContent());
+    }
+
+    // ── Builder validation ────────────────────────────────────────────────────
+
+    @Test(expected = NullPointerException.class)
+    public void testBuilderRejectsNullTokenizer() {
+        new SearchEngine.Builder().tokenizer(null).build();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuilderRejectsNullQueryStrategy() {
+        new SearchEngine.Builder().queryStrategy(null).build();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuilderRejectsNullRanker() {
+        new SearchEngine.Builder().ranker(null).build();
     }
 }

@@ -7,6 +7,7 @@ import com.rcpky.model.EvaluationResult;
 import com.rcpky.model.FlagDefinition;
 import com.rcpky.store.FlagStore;
 import com.rcpky.store.InMemoryFlagStore;
+import com.rcpky.utils.Validator;
 
 /**
  * In-process feature flag library.
@@ -35,6 +36,13 @@ public class FeatureFlagClient {
 
     private final FlagStore store;
     private final FlagEvaluator evaluator;
+    private final Validator validator;
+
+    public FeatureFlagClient(FlagStore store, FlagEvaluator evaluator, Validator validator) {
+        this.store = store;
+        this.evaluator = evaluator;
+        this.validator = validator;
+    }
 
     public FeatureFlagClient() {
         this(new InMemoryFlagStore());
@@ -43,9 +51,12 @@ public class FeatureFlagClient {
     public FeatureFlagClient(FlagStore store) {
         this.store = store;
         this.evaluator = new FlagEvaluator(store);
+        this.validator = new Validator();
     }
 
     public void register(FlagDefinition flag) {
+
+        validator.validateDefaultType(flag, flag.defaultValue());
         store.put(flag);
     }
 

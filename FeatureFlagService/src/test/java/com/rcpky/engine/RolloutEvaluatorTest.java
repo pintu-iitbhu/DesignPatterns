@@ -26,19 +26,19 @@ class RolloutEvaluatorTest {
 
     @Test
     void evaluate_returnsEmpty_whenUserIdIsNull() {
-        Rollout rollout = new Rollout(100, true);
+        Rollout rollout = new Rollout(100, true,null);
         assertEquals(Optional.empty(), evaluator.evaluate("flag", null, rollout));
     }
 
     @Test
     void evaluate_returnsEmpty_whenUserIdIsBlank() {
-        Rollout rollout = new Rollout(100, true);
+        Rollout rollout = new Rollout(100, true,null);
         assertEquals(Optional.empty(), evaluator.evaluate("flag", "   ", rollout));
     }
 
     @Test
     void evaluate_returnsValue_forAllUsers_whenPercentageIs100() {
-        Rollout rollout = new Rollout(100, true);
+        Rollout rollout = new Rollout(100, true,null);
         for (int i = 0; i < 50; i++) {
             Optional<Object> result = evaluator.evaluate("flag", "user-" + i, rollout);
             assertTrue(result.isPresent(), "user-" + i + " should be in 100% rollout");
@@ -47,7 +47,7 @@ class RolloutEvaluatorTest {
 
     @Test
     void evaluate_returnsEmpty_forAllUsers_whenPercentageIs0() {
-        Rollout rollout = new Rollout(0, true);
+        Rollout rollout = new Rollout(0, true,null);
         for (int i = 0; i < 50; i++) {
             Optional<Object> result = evaluator.evaluate("flag", "user-" + i, rollout);
             assertTrue(result.isEmpty(), "user-" + i + " should not be in 0% rollout");
@@ -57,7 +57,7 @@ class RolloutEvaluatorTest {
     @RepeatedTest(10)
     void evaluate_isSticky_sameUserAlwaysGetsSameResult() {
         String userId = UUID.randomUUID().toString();
-        Rollout rollout = new Rollout(50, "variant-A");
+        Rollout rollout = new Rollout(50, "variant-A",null);
 
         Optional<Object> first = evaluator.evaluate("my-flag", userId, rollout);
         for (int i = 0; i < 20; i++) {
@@ -69,7 +69,7 @@ class RolloutEvaluatorTest {
     @Test
     void evaluate_isIndependentPerFlag_sameUserDifferentFlags() {
         String userId = "sticky-user";
-        Rollout rollout = new Rollout(50, true);
+        Rollout rollout = new Rollout(50, true,null);
 
         Optional<Object> resultA = evaluator.evaluate("flag-alpha", userId, rollout);
         Optional<Object> resultB = evaluator.evaluate("flag-beta", userId, rollout);
@@ -82,7 +82,7 @@ class RolloutEvaluatorTest {
 
     @Test
     void evaluate_rolloutDistributionIsApproximatelyCorrect() {
-        Rollout rollout = new Rollout(50, true);
+        Rollout rollout = new Rollout(50, true,null);
         int inRollout = 0;
         int total = 1000;
 

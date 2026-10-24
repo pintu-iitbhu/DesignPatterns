@@ -2,7 +2,8 @@ package com.rcpky.model;
 
 public record Rollout(
         int percentage,
-        Object value
+        Object value,
+        String bucketingKey
 ) {
     public Rollout {
         if (percentage < 0 || percentage > 100) {

@@ -34,7 +34,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_throwsTypeMismatchException_forWrongType() {
-        store.put(new FlagDefinition("bool-flag", FlagType.BOOLEAN, false, List.of(), null));
+        store.put(new FlagDefinition("bool-flag", FlagType.BOOLEAN, false, List.of(), null, true));
         EvaluationContext ctx = EvaluationContext.anonymous();
         assertThrows(TypeMismatchException.class,
                 () -> evaluator.evaluate("bool-flag", ctx, String.class));
@@ -42,7 +42,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_returnsDefault_whenNoRulesAndNoRollout() {
-        store.put(new FlagDefinition("my-flag", FlagType.BOOLEAN, false, List.of(), null));
+        store.put(new FlagDefinition("my-flag", FlagType.BOOLEAN, false, List.of(), null, true));
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of());
 
         EvaluationResult<Boolean> result = evaluator.evaluate("my-flag", ctx, Boolean.class);
@@ -55,7 +55,7 @@ class FlagEvaluatorTest {
     void evaluate_returnsRuleMatch_whenConditionMatches() {
         Rule rule = new Rule(LogicOperator.AND,
                 List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
-        store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null));
+        store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "enterprise"));
         EvaluationResult<Boolean> result = evaluator.evaluate("feature-x", ctx, Boolean.class);
@@ -68,7 +68,7 @@ class FlagEvaluatorTest {
     void evaluate_returnsDefault_whenRuleDoesNotMatch() {
         Rule rule = new Rule(LogicOperator.AND,
                 List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
-        store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null));
+        store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "free"));
         EvaluationResult<Boolean> result = evaluator.evaluate("feature-x", ctx, Boolean.class);
@@ -80,7 +80,7 @@ class FlagEvaluatorTest {
     @Test
     void evaluate_returnsRollout_whenNoRuleMatchesAndUserInRollout() {
         store.put(new FlagDefinition("rollout-flag", FlagType.BOOLEAN, false,
-                List.of(), new Rollout(100, true)));
+                List.of(), new Rollout(100, true, null), true));
 
         EvaluationContext ctx = EvaluationContext.of("any-user", Map.of());
         EvaluationResult<Boolean> result = evaluator.evaluate("rollout-flag", ctx, Boolean.class);
@@ -92,7 +92,7 @@ class FlagEvaluatorTest {
     @Test
     void evaluate_returnsDefault_whenNoRuleMatchesAndUserNotInRollout() {
         store.put(new FlagDefinition("rollout-flag", FlagType.BOOLEAN, false,
-                List.of(), new Rollout(0, true)));
+                List.of(), new Rollout(0, true, null), true));
 
         EvaluationContext ctx = EvaluationContext.of("any-user", Map.of());
         EvaluationResult<Boolean> result = evaluator.evaluate("rollout-flag", ctx, Boolean.class);
@@ -106,7 +106,7 @@ class FlagEvaluatorTest {
         Rule rule = new Rule(LogicOperator.AND,
                 List.of(new Condition("plan", ConditionOperator.EQUALS, "pro")), "rule-variant");
         store.put(new FlagDefinition("priority-flag", FlagType.STRING, "default",
-                List.of(rule), new Rollout(100, "rollout-variant")));
+                List.of(rule), new Rollout(100, "rollout-variant", null), true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "pro"));
         EvaluationResult<String> result = evaluator.evaluate("priority-flag", ctx, String.class);
@@ -119,17 +119,31 @@ class FlagEvaluatorTest {
     void evaluate_stringFlag_returnsCorrectVariant() {
         Rule rule = new Rule(LogicOperator.AND,
                 List.of(new Condition("country", ConditionOperator.IN, List.of("US", "CA"))), "en-US");
-        store.put(new FlagDefinition("locale-flag", FlagType.STRING, "en-GB", List.of(rule), null));
+        store.put(new FlagDefinition("locale-flag", FlagType.STRING, "en-GB", List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("country", "US"));
         assertEquals("en-US", evaluator.evaluate("locale-flag", ctx, String.class).value());
     }
 
     @Test
+    void evaluate_disabledFlag_returnsDefaultWithDisabledReason_ignoringRulesAndRollout() {
+        Rule rule = new Rule(LogicOperator.AND,
+                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
+        store.put(new FlagDefinition("disabled-flag", FlagType.BOOLEAN, false,
+                List.of(rule), new Rollout(100, true, null), false));
+
+        EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "enterprise"));
+        EvaluationResult<Boolean> result = evaluator.evaluate("disabled-flag", ctx, Boolean.class);
+
+        assertFalse(result.value());
+        assertEquals(EvaluationReason.DISABLED, result.reason());
+    }
+
+    @Test
     void evaluate_integerFlag_returnsCorrectValue() {
         Rule rule = new Rule(LogicOperator.AND,
                 List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), 1000);
-        store.put(new FlagDefinition("rate-limit", FlagType.INTEGER, 100, List.of(rule), null));
+        store.put(new FlagDefinition("rate-limit", FlagType.INTEGER, 100, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "enterprise"));
         assertEquals(1000, evaluator.evaluate("rate-limit", ctx, Integer.class).value());

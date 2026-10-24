@@ -7,7 +7,8 @@ public record FlagDefinition(
         FlagType type,
         Object defaultValue,
         List<Rule> rules,
-        Rollout rollout
+        Rollout rollout,
+        boolean isActive
 ) {
     public FlagDefinition {
         if (name == null || name.isBlank()) {

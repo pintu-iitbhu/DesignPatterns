@@ -7,4 +7,9 @@ public class TypeMismatchException extends RuntimeException {
         super("Type mismatch for flag '" + flagName + "': flag is " + expected
                 + " but caller requested " + actual.getSimpleName());
     }
+
+    public  TypeMismatchException(String flagName, Object defaultValue, FlagType expected) {
+        super("Type mismatch for flag '" + flagName + "': flag is " + expected
+                + " but caller requested " + defaultValue.getClass().getSimpleName());
+    }
 }

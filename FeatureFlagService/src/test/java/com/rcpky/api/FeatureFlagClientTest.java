@@ -5,6 +5,9 @@ import com.rcpky.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static com.rcpky.model.ConditionOperator.*;
+import static com.rcpky.model.LogicOperator.*;
+
 
 import java.util.List;
 import java.util.Map;
@@ -31,8 +34,8 @@ class FeatureFlagClientTest {
 
     @Test
     void getBooleanFlag_returnsTrue_forMatchingTargetingRule() {
-        Rule rule = new Rule(LogicOperator.AND, List.of(
-                new Condition("plan", ConditionOperator.IN, List.of("pro", "enterprise"))
+        Rule rule = Rule.and(List.of(
+                new Condition("plan", IN, List.of("pro", "enterprise"))
         ), true);
         client.register(new FlagDefinition("dark-mode", FlagType.BOOLEAN, false, List.of(rule), null, true));
 
@@ -51,8 +54,8 @@ class FeatureFlagClientTest {
 
     @Test
     void getStringFlag_returnsVariant_forMatchingRule() {
-        Rule rule = new Rule(LogicOperator.AND, List.of(
-                new Condition("country", ConditionOperator.EQUALS, "US")
+        Rule rule = Rule.and(List.of(
+                new Condition("country", EQUALS, "US")
         ), "v2");
         client.register(new FlagDefinition("checkout-flow", FlagType.STRING, "v1", List.of(rule), null, true));
 
@@ -71,8 +74,8 @@ class FeatureFlagClientTest {
 
     @Test
     void getIntegerFlag_returnsHigherLimit_forEnterpriseUser() {
-        Rule rule = new Rule(LogicOperator.AND, List.of(
-                new Condition("plan", ConditionOperator.EQUALS, "enterprise")
+        Rule rule = Rule.and(List.of(
+                new Condition("plan", EQUALS, "enterprise")
         ), 100);
         client.register(new FlagDefinition("max-retries", FlagType.INTEGER, 3, List.of(rule), null, true));
 
@@ -108,14 +111,14 @@ class FeatureFlagClientTest {
 
     @Test
     void complexRule_AND_then_OR_conditions() {
-        Rule andRule = new Rule(LogicOperator.AND, List.of(
-                new Condition("plan", ConditionOperator.EQUALS, "pro"),
-                new Condition("country", ConditionOperator.IN, List.of("US", "CA"))
+        Rule andRule = Rule.and(List.of(
+                new Condition("plan", EQUALS, "pro"),
+                new Condition("country", IN, List.of("US", "CA"))
         ), "pro-na-variant");
 
-        Rule orRule = new Rule(LogicOperator.OR, List.of(
-                new Condition("user_id", ConditionOperator.EQUALS, "beta-tester-1"),
-                new Condition("user_id", ConditionOperator.EQUALS, "beta-tester-2")
+        Rule orRule = Rule.or(List.of(
+                new Condition("user_id", EQUALS, "beta-tester-1"),
+                new Condition("user_id", EQUALS, "beta-tester-2")
         ), "beta-variant");
 
         client.register(new FlagDefinition("feature-y", FlagType.STRING, "default",
@@ -138,8 +141,7 @@ class FeatureFlagClientTest {
 
     @Test
     void disabledFlag_returnsDefaultAndDisabledReason_ignoringRulesAndRollout() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "enterprise")), true);
         client.register(new FlagDefinition("kill-switch", FlagType.BOOLEAN, false,
                 List.of(rule), new Rollout(100, true, null), false));
 

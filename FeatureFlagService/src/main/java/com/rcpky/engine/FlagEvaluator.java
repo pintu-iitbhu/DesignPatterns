@@ -15,8 +15,12 @@ public class FlagEvaluator {
     private final Validator validator;
 
     public FlagEvaluator(FlagStore store) {
+        this(store, new RuleEvaluator());
+    }
+
+    public FlagEvaluator(FlagStore store, RuleEvaluator ruleEvaluator) {
         this.store = store;
-        this.ruleEvaluator = new RuleEvaluator();
+        this.ruleEvaluator = ruleEvaluator;
         this.rolloutEvaluator = new RolloutEvaluator();
         this.validator = new Validator();
     }

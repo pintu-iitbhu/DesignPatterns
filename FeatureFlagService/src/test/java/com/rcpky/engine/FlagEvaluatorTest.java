@@ -4,6 +4,8 @@ import com.rcpky.exception.FlagNotFoundException;
 import com.rcpky.exception.TypeMismatchException;
 import com.rcpky.model.*;
 import com.rcpky.store.InMemoryFlagStore;
+
+import static com.rcpky.model.ConditionOperator.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -53,8 +55,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_returnsRuleMatch_whenConditionMatches() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "enterprise")), true);
         store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "enterprise"));
@@ -66,8 +67,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_returnsDefault_whenRuleDoesNotMatch() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "enterprise")), true);
         store.put(new FlagDefinition("feature-x", FlagType.BOOLEAN, false, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "free"));
@@ -103,8 +103,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_ruleMatchTakesPrecedenceOverRollout() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "pro")), "rule-variant");
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "pro")), "rule-variant");
         store.put(new FlagDefinition("priority-flag", FlagType.STRING, "default",
                 List.of(rule), new Rollout(100, "rollout-variant", null), true));
 
@@ -117,8 +116,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_stringFlag_returnsCorrectVariant() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("country", ConditionOperator.IN, List.of("US", "CA"))), "en-US");
+        Rule rule = Rule.and(List.of(new Condition("country", IN, List.of("US", "CA"))), "en-US");
         store.put(new FlagDefinition("locale-flag", FlagType.STRING, "en-GB", List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("country", "US"));
@@ -127,8 +125,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_disabledFlag_returnsDefaultWithDisabledReason_ignoringRulesAndRollout() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), true);
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "enterprise")), true);
         store.put(new FlagDefinition("disabled-flag", FlagType.BOOLEAN, false,
                 List.of(rule), new Rollout(100, true, null), false));
 
@@ -141,8 +138,7 @@ class FlagEvaluatorTest {
 
     @Test
     void evaluate_integerFlag_returnsCorrectValue() {
-        Rule rule = new Rule(LogicOperator.AND,
-                List.of(new Condition("plan", ConditionOperator.EQUALS, "enterprise")), 1000);
+        Rule rule = Rule.and(List.of(new Condition("plan", EQUALS, "enterprise")), 1000);
         store.put(new FlagDefinition("rate-limit", FlagType.INTEGER, 100, List.of(rule), null, true));
 
         EvaluationContext ctx = EvaluationContext.of("u1", Map.of("plan", "enterprise"));

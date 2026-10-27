@@ -1,12 +1,10 @@
-package com.rcpky.engine;
-
-import com.rcpky.model.ConditionOperator;
+package com.rcpky.rule;
 
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 
-import static com.rcpky.model.ConditionOperator.*;
+import static com.rcpky.rule.ConditionOperator.*;
 
 /**
  * Registry of {@link ConditionMatcher} strategies keyed by {@link ConditionOperator}.

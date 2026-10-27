@@ -1,4 +1,7 @@
-package com.rcpky.model;
+package com.rcpky.rule;
+
+import com.rcpky.evaluation.EvaluationContext;
+import com.rcpky.flag.FlagValue;
 
 import java.util.List;
 
@@ -24,16 +27,16 @@ import java.util.List;
  *   )
  * }</pre>
  */
-public record Rule(RuleExpression expression, Object targetValue) {
+public record Rule(RuleExpression expression, FlagValue targetValue) {
 
-    public static Rule and(List<Condition> conditions, Object targetValue) {
+    public static Rule and(List<Condition> conditions, FlagValue targetValue) {
         return new Rule(
                 new CompositeExpression(LogicOperator.AND,
                         conditions.stream().<RuleExpression>map(AtomicExpression::new).toList()),
                 targetValue);
     }
 
-    public static Rule or(List<Condition> conditions, Object targetValue) {
+    public static Rule or(List<Condition> conditions, FlagValue targetValue) {
         return new Rule(
                 new CompositeExpression(LogicOperator.OR,
                         conditions.stream().<RuleExpression>map(AtomicExpression::new).toList()),

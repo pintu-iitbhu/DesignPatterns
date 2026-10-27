@@ -1,4 +1,4 @@
-package com.rcpky.model;
+package com.rcpky.evaluation;
 
 public enum EvaluationReason {
     RULE_MATCH,

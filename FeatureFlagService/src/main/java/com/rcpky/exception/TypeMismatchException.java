@@ -1,6 +1,6 @@
 package com.rcpky.exception;
 
-import com.rcpky.model.FlagType;
+import com.rcpky.flag.FlagType;
 
 public class TypeMismatchException extends RuntimeException {
     public TypeMismatchException(String flagName, FlagType expected, Class<?> actual) {

@@ -1,19 +1,19 @@
-package com.rcpky.engine;
+package com.rcpky.rollout;
 
-import com.rcpky.model.Rollout;
+import com.rcpky.flag.FlagValue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.zip.CRC32;
 
-public class RolloutEvaluator {
+public class RolloutEvaluator implements RolloutStrategy {
 
     /**
      * Sticky bucketing: hash(flagName + "|" + userId) % 100 < percentage.
      * CRC32 is deterministic across JVM restarts, guaranteeing stickiness.
      * Bucketing key includes the flag name so each flag rolls out independently.
      */
-    public Optional<Object> evaluate(String flagName, String userId, Rollout rollout) {
+    public Optional<FlagValue> evaluate(String flagName, String userId, Rollout rollout) {
         if (rollout == null || userId == null || userId.isBlank()) {
             return Optional.empty();
         }

@@ -1,13 +1,15 @@
 package com.rcpky.api;
 
 
-import com.rcpky.engine.FlagEvaluator;
-import com.rcpky.model.EvaluationContext;
-import com.rcpky.model.EvaluationResult;
-import com.rcpky.model.FlagDefinition;
+import com.rcpky.flag.FlagEvaluator;
+import com.rcpky.evaluation.EvaluationContext;
+import com.rcpky.evaluation.EvaluationResult;
+import com.rcpky.flag.FlagDefinition;
 import com.rcpky.store.FlagStore;
 import com.rcpky.store.InMemoryFlagStore;
 import com.rcpky.utils.Validator;
+
+import java.util.Objects;
 
 /**
  * In-process feature flag library.
@@ -49,34 +51,36 @@ public class FeatureFlagClient {
     }
 
     public FeatureFlagClient(FlagStore store) {
-        this.store = store;
-        this.evaluator = new FlagEvaluator(store);
-        this.validator = new Validator();
+        this(store, new FlagEvaluator(store), new Validator());
     }
 
     public void register(FlagDefinition flag) {
-
+        Objects.requireNonNull(flag, "flag must not be null");
         validator.validateDefaultType(flag, flag.defaultValue());
         store.put(flag);
     }
 
     public void deregister(String flagName) {
+        Objects.requireNonNull(flagName, "flagName must not be null");
         store.remove(flagName);
     }
 
     public boolean getBooleanFlag(String flagName, EvaluationContext ctx) {
-        return evaluator.evaluate(flagName, ctx, Boolean.class).value();
+        return evaluate(flagName, ctx, Boolean.class).value();
     }
 
     public String getStringFlag(String flagName, EvaluationContext ctx) {
-        return evaluator.evaluate(flagName, ctx, String.class).value();
+        return evaluate(flagName, ctx, String.class).value();
     }
 
     public int getIntegerFlag(String flagName, EvaluationContext ctx) {
-        return evaluator.evaluate(flagName, ctx, Integer.class).value();
+        return evaluate(flagName, ctx, Integer.class).value();
     }
 
     public <T> EvaluationResult<T> evaluate(String flagName, EvaluationContext ctx, Class<T> type) {
+        Objects.requireNonNull(flagName, "flagName must not be null");
+        Objects.requireNonNull(ctx, "ctx must not be null");
+        Objects.requireNonNull(type, "type must not be null");
         return evaluator.evaluate(flagName, ctx, type);
     }
 }

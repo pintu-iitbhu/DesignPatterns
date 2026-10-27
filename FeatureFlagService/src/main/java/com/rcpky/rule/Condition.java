@@ -1,4 +1,4 @@
-package com.rcpky.model;
+package com.rcpky.rule;
 
 public record Condition(
         String attribute,

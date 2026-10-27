@@ -39,9 +39,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <source>21</source>
-          <target>21</target>
-          <compilerArgs>--enable-preview</compilerArgs>
+          <!-- release enforces source, target, and bootstrap classpath in one flag.        -->
+          <!-- newVirtualThreadPerTaskExecutor is stable GA in Java 21, not a preview API. -->
+          <release>21</release>
         </configuration>
       </plugin>
     </plugins>

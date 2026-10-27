@@ -1,15 +1,15 @@
 package com.rcpky.utils;
 
 import com.rcpky.exception.TypeMismatchException;
-import com.rcpky.model.FlagDefinition;
-import com.rcpky.model.FlagType;
+import com.rcpky.flag.FlagDefinition;
+import com.rcpky.flag.FlagValue;
 
 public class Validator {
 
     public void validateType(FlagDefinition flag, Class<?> requested) {
         boolean valid = switch (flag.type()) {
             case BOOLEAN -> requested == Boolean.class;
-            case STRING -> requested == String.class;
+            case STRING  -> requested == String.class;
             case INTEGER -> requested == Integer.class;
         };
         if (!valid) {
@@ -17,17 +17,14 @@ public class Validator {
         }
     }
 
-    public void validateDefaultType(FlagDefinition flag, Object defaultValue) {
-
+    public void validateDefaultType(FlagDefinition flag, FlagValue defaultValue) {
         boolean ok = switch (flag.type()) {
-            case BOOLEAN -> defaultValue instanceof Boolean;
-            case STRING -> defaultValue instanceof String;
-            case INTEGER -> defaultValue instanceof Integer;
+            case BOOLEAN -> defaultValue instanceof FlagValue.BoolValue;
+            case STRING  -> defaultValue instanceof FlagValue.StringValue;
+            case INTEGER -> defaultValue instanceof FlagValue.IntValue;
         };
-
         if (!ok) {
-            throw new TypeMismatchException(flag.name(), defaultValue,flag.type());
+            throw new TypeMismatchException(flag.name(), defaultValue, flag.type());
         }
-
     }
 }

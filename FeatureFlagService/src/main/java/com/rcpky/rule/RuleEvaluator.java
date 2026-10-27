@@ -1,8 +1,7 @@
-package com.rcpky.engine;
+package com.rcpky.rule;
 
-import com.rcpky.model.Condition;
-import com.rcpky.model.EvaluationContext;
-import com.rcpky.model.Rule;
+import com.rcpky.evaluation.EvaluationContext;
+import com.rcpky.flag.FlagValue;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +18,7 @@ public class RuleEvaluator {
         this.registry = registry;
     }
 
-    public Optional<Object> evaluate(List<Rule> rules, EvaluationContext ctx) {
+    public Optional<FlagValue> evaluate(List<Rule> rules, EvaluationContext ctx) {
         for (Rule rule : rules) {
             if (rule.expression().evaluate(c -> evaluateCondition(c, ctx))) {
                 return Optional.of(rule.targetValue());

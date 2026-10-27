@@ -1,6 +1,6 @@
 package com.rcpky.store;
 
-import com.rcpky.model.FlagDefinition;
+import com.rcpky.flag.FlagDefinition;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;

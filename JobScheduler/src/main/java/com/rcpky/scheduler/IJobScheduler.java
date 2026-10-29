@@ -25,6 +25,18 @@ public interface IJobScheduler {
     // completed, cancelled, or the ID is unknown.
     boolean cancel(String jobId);
 
+    /**
+     * Schedule a one-shot job with retry and lease semantics.
+     *
+     * @param task           work to execute
+     * @param delayMs        initial delay before first attempt
+     * @param maxRetries     how many additional attempts after the first failure (0 = none)
+     * @param retryDelayMs   base backoff delay; actual delay = retryDelayMs * 2^attempt
+     * @param leaseTimeoutMs max ms the task may run before it is forcibly cancelled (0 = unlimited)
+     */
+    String scheduleWithOptions(Runnable task, long delayMs,
+                               int maxRetries, long retryDelayMs, long leaseTimeoutMs);
+
     // Graceful shutdown: stops accepting new jobs, waits for in-flight
     // tasks to complete, then terminates the worker pool.
     void shutdown();

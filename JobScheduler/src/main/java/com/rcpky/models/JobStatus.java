@@ -4,11 +4,12 @@ package com.rcpky.models;
  * Lifecycle state machine for a Job.
  * Valid transitions:
  *
- *   PENDING → RUNNING   (dispatcher picks it up; enforced via CAS in runJob)
- *   RUNNING → COMPLETED (ONCE job finishes successfully)
- *   RUNNING → PENDING   (recurring job rescheduled for next run)
- *   RUNNING → FAILED    (task threw an exception)
- *   PENDING → CANCELLED (cancel() called before execution started)
+ *   PENDING → RUNNING        (dispatcher picks it up; enforced via CAS in runJob)
+ *   RUNNING → COMPLETED      (ONCE job finishes successfully)
+ *   RUNNING → PENDING        (recurring job rescheduled for next run, or retry)
+ *   RUNNING → FAILED         (task threw; maxRetries=0, no DLQ configured)
+ *   RUNNING → DEAD_LETTERED  (task exhausted all retries; moved to DLQ)
+ *   PENDING → CANCELLED      (cancel() called before execution started)
  *
  * There is no RUNNING → CANCELLED transition by design — we cannot
  * forcibly stop a running thread safely. Cancelling a running job marks
@@ -19,5 +20,6 @@ public enum JobStatus {
     RUNNING,
     COMPLETED,
     FAILED,
-    CANCELLED
+    CANCELLED,
+    DEAD_LETTERED
 }

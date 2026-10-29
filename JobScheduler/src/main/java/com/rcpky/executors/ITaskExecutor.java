@@ -1,5 +1,6 @@
 package com.rcpky.executors;
 
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,6 +18,10 @@ public interface ITaskExecutor {
 
     // Submit a task for asynchronous execution. Must not block the caller.
     void execute(Runnable task);
+
+    // Submit a task and return a Future for result/timeout tracking.
+    // Used by the lease executor to enforce per-job execution deadlines.
+    Future<?> submit(Runnable task);
 
     // Initiate orderly shutdown. No new tasks accepted; in-flight tasks complete.
     void shutdown();

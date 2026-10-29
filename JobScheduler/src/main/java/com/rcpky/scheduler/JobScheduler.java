@@ -1,5 +1,8 @@
 package com.rcpky.scheduler;
 
+import com.rcpky.dlq.DeadLetterEntry;
+import com.rcpky.dlq.IDeadLetterQueue;
+import com.rcpky.executors.CachedThreadPoolTaskExecutor;
 import com.rcpky.executors.ITaskExecutor;
 import com.rcpky.executors.ThreadPoolTaskExecutor;
 import com.rcpky.models.Job;
@@ -8,43 +11,71 @@ import com.rcpky.models.JobType;
 import com.rcpky.store.IJobQueue;
 import com.rcpky.store.PriorityJobQueue;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Orchestrates job dispatch. Single Responsibility: it only decides
- * WHAT to do with a job once the queue says it's due. It does NOT own
- * storage (IJobQueue) or execution (ITaskExecutor) — both are injected.
+ * WHAT to do with a job once the queue says it's due. Storage (IJobQueue),
+ * execution (ITaskExecutor), and dead-lettering (IDeadLetterQueue) are
+ * all injected dependencies.
  *
  * Thread model:
- *   dispatcher thread  — single thread, calls jobQueue.awaitNext() in a loop.
+ *   dispatcher thread  — single thread; calls jobQueue.awaitNext() in a loop.
  *                         Blocks inside the queue until a job is due, then
  *                         hands it to the worker pool. Never does real work.
- *   worker thread pool — N threads executing job tasks concurrently.
+ *   worker thread pool — N threads running runJob() concurrently.
  *                         Slow jobs don't block the dispatcher or each other.
+ *   lease executor     — unbounded cached pool; used only when leaseTimeoutMs>0.
+ *                         The worker thread submits the task here and blocks on
+ *                         Future.get(leaseTimeoutMs) to enforce the timeout.
+ *                         Separate from the worker pool to avoid deadlocks.
  */
 public class JobScheduler implements IJobScheduler {
 
     private final IJobQueue jobQueue;
     private final ITaskExecutor taskExecutor;
 
+    // Nullable: null means no DLQ — failed jobs just transition to FAILED.
+    private final IDeadLetterQueue dlq;
+
+    // Dedicated executor for tasks that run under a lease timeout.
+    // Injected as ITaskExecutor — defaults to CachedThreadPoolTaskExecutor so
+    // it never deadlocks with the fixed-size taskExecutor pool. Callers can
+    // substitute any ITaskExecutor impl (e.g. VirtualThreadExecutor for I/O-heavy jobs).
+    private final ITaskExecutor leaseExecutor;
+
     // volatile: written by shutdown() on the caller thread,
     // read by the dispatcher thread. No lock needed for a single boolean flag.
     private volatile boolean running;
     private final Thread dispatcher;
 
-    // Convenience constructor — wires up default implementations.
+    // Convenience constructor — no DLQ, no retries, no leases (legacy behaviour).
     public JobScheduler(int workerThreads) {
-        this(new PriorityJobQueue(), new ThreadPoolTaskExecutor(workerThreads));
+        this(new PriorityJobQueue(), new ThreadPoolTaskExecutor(workerThreads),
+                new CachedThreadPoolTaskExecutor("lease-worker"), null);
+    }
+
+    // Constructor with DLQ — enables dead-lettering of exhausted jobs.
+    public JobScheduler(int workerThreads, IDeadLetterQueue dlq) {
+        this(new PriorityJobQueue(), new ThreadPoolTaskExecutor(workerThreads),
+                new CachedThreadPoolTaskExecutor("lease-worker"), dlq);
     }
 
     // Full DI constructor — used in tests to inject mocks/stubs.
-    // Starts the dispatcher thread immediately after wiring dependencies.
-    public JobScheduler(IJobQueue jobQueue, ITaskExecutor taskExecutor) {
+    // leaseExecutor is a separate ITaskExecutor so callers can swap the execution
+    // strategy (e.g. VirtualThreadExecutor for I/O-heavy leased jobs).
+    public JobScheduler(IJobQueue jobQueue, ITaskExecutor taskExecutor,
+                        ITaskExecutor leaseExecutor, IDeadLetterQueue dlq) {
         this.jobQueue = jobQueue;
         this.taskExecutor = taskExecutor;
+        this.leaseExecutor = leaseExecutor;
+        this.dlq = dlq;
         this.running = true;
         this.dispatcher = new Thread(this::dispatch, "job-dispatcher");
-        this.dispatcher.setDaemon(true); // doesn't prevent JVM exit
+        this.dispatcher.setDaemon(true);
         this.dispatcher.start();
     }
 
@@ -59,10 +90,9 @@ public class JobScheduler implements IJobScheduler {
         while (running) {
             try {
                 Job job = jobQueue.awaitNext(); // blocks; returns null on shutdown
-                if (job == null) break;         // queue shut down, exit loop
+                if (job == null) break;
 
-                // Lazy deletion check: job was polled from the heap but may have
-                // been cancelled while it was waiting. Skip without executing.
+                // Lazy deletion check: job was cancelled while waiting in the heap.
                 if (job.getStatus() != JobStatus.CANCELLED) {
                     taskExecutor.execute(() -> runJob(job));
                 }
@@ -73,59 +103,126 @@ public class JobScheduler implements IJobScheduler {
     }
 
     /**
-     * Runs on a worker thread. Three possible outcomes after execution:
-     *   1. ONCE job succeeds  → mark COMPLETED, remove from registry.
-     *   2. Recurring job succeeds → reschedule (re-enqueue with new nextRunTime).
-     *   3. Task throws        → mark FAILED, do not reschedule.
+     * Runs on a worker thread. Outcomes:
+     *   • Lease timeout  → handleFailure (retry or DLQ)
+     *   • Task exception → handleFailure (retry or DLQ)
+     *   • Success + ONCE → COMPLETED, remove from registry
+     *   • Success + recurring → reschedule
      *
-     * CAS PENDING→RUNNING at the start prevents double-execution if two
-     * threads somehow both get the same job (defensive, shouldn't happen
-     * with a single dispatcher but guards against future changes).
+     * Lease enforcement: when leaseTimeoutMs > 0 the actual task is submitted
+     * to a separate leaseExecutor and this thread blocks on Future.get(timeout).
+     * On TimeoutException the Future is cancelled (interrupt sent) and the job
+     * is treated as failed. Using a separate executor avoids deadlocks with the
+     * fixed-size worker pool.
+     *
+     * CAS PENDING→RUNNING prevents double-execution (defensive guard).
      */
     private void runJob(Job job) {
         if (!job.compareAndSetStatus(JobStatus.PENDING, JobStatus.RUNNING)) {
-            return; // another thread already owns this job; bail out
+            return; // another thread already owns this execution slot
         }
+
+        String failureReason = null;
+
         try {
-            job.getTask().run();
-            if (job.getType().isRecurring()) {
-                reschedule(job);
+            if (job.getLeaseTimeoutMs() > 0) {
+                // --- Lease-bounded execution: delegate to ITaskExecutor ---
+                Future<?> future = leaseExecutor.submit(job.getTask());
+                try {
+                    future.get(job.getLeaseTimeoutMs(), TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    future.cancel(true); // interrupt the leased thread
+                    failureReason = "Lease expired after " + job.getLeaseTimeoutMs() + " ms";
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    failureReason = cause != null ? cause.getMessage() : "Task execution failed";
+                }
             } else {
-                job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.COMPLETED);
-                jobQueue.remove(job.getId()); // clean up registry for ONCE jobs
+                // --- Direct execution (no lease) ---
+                job.getTask().run();
             }
         } catch (Exception e) {
-            job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.FAILED);
-            // Do not rethrow: pool.submit() would silently swallow it anyway.
-            // In production, hook an Observer here for alerting/metrics.
-            System.err.println("[JobScheduler] Job " + job.getId() + " failed: " + e.getMessage());
+            failureReason = e.getMessage();
+        }
+
+        if (failureReason != null) {
+            handleFailure(job, failureReason);
+            return;
+        }
+
+        // --- Success path ---
+        if (job.getType().isRecurring()) {
+            reschedule(job);
+        } else {
+            job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.COMPLETED);
+            jobQueue.remove(job.getId());
+        }
+    }
+
+    /**
+     * Called on every job failure (exception or lease expiry).
+     *
+     * Retry logic:
+     *   retriesUsed = retryCount before this failure (0-based).
+     *   If retriesUsed < maxRetries → re-enqueue with exponential backoff.
+     *   Otherwise → dead-letter (if DLQ is wired) or FAILED (legacy path).
+     *
+     * Exponential backoff: delay = retryDelayMs * 2^retriesUsed
+     *   attempt 0 (first retry)  → retryDelayMs * 1
+     *   attempt 1 (second retry) → retryDelayMs * 2
+     *   attempt 2 (third retry)  → retryDelayMs * 4
+     *   ...
+     */
+    private void handleFailure(Job job, String reason) {
+        int retriesUsed = job.getRetryCount().getAndIncrement(); // read then increment
+
+        if (retriesUsed < job.getMaxRetries()) {
+            // Retry: exponential backoff, re-enqueue (stays in registry)
+            long backoffMs = job.getRetryDelayMs() * (1L << retriesUsed);
+            job.setNextRunTime(System.currentTimeMillis() + backoffMs);
+            job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.PENDING);
+            jobQueue.enqueue(job);
+            System.err.println("[JobScheduler] Job " + job.getId()
+                    + " retrying (attempt " + (retriesUsed + 1) + "/" + job.getMaxRetries()
+                    + ") in " + backoffMs + " ms — cause: " + reason);
+        } else {
+            // No retries left → dead-letter or plain FAILED
+            jobQueue.remove(job.getId());
+            if (dlq != null) {
+                job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.DEAD_LETTERED);
+                dlq.add(new DeadLetterEntry(
+                        job.getId(), job.getType(), reason,
+                        retriesUsed + 1, System.currentTimeMillis()));
+            } else {
+                job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.FAILED);
+                System.err.println("[JobScheduler] Job " + job.getId()
+                        + " failed after " + (retriesUsed + 1) + " attempt(s): " + reason);
+            }
         }
     }
 
     /**
      * Re-enqueues a recurring job for its next execution.
      *
-     * Registry check first: if the job was cancelled while it was RUNNING,
-     * jobQueue.remove() already deleted it from the registry. contains()
-     * returns false here and we silently drop the reschedule — the job
-     * effectively stops after the current execution finishes.
+     * Registry check first: if the job was cancelled while RUNNING,
+     * jobQueue.remove() already deleted it. contains() returns false and
+     * we silently stop the recurring chain.
      *
-     * nextRunTime is delegated to JobType (Strategy Pattern) so this method
-     * has zero knowledge of FIXED_RATE vs FIXED_DELAY semantics.
+     * nextRunTime is delegated to JobType (Strategy Pattern).
      */
     private void reschedule(Job job) {
-        if (!jobQueue.contains(job.getId())) return; // was cancelled; stop recurring
+        if (!jobQueue.contains(job.getId())) return; // cancelled; stop recurring
 
         long nextRunTime = job.getType().nextRunTime(job.getNextRunTime(), job.getPeriod());
         job.setNextRunTime(nextRunTime);
-        job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.PENDING); // ready for next pick-up
-        jobQueue.enqueue(job); // back into the min-heap
+        job.compareAndSetStatus(JobStatus.RUNNING, JobStatus.PENDING);
+        jobQueue.enqueue(job);
     }
 
     @Override
     public String scheduleOnce(Runnable task, long delayMs) {
         Job job = new Job(task, delayMs, 0, JobType.ONCE);
-        jobQueue.enqueue(job); // enqueue handles registry.put + heap.offer + signal
+        jobQueue.enqueue(job);
         return job.getId();
     }
 
@@ -144,33 +241,43 @@ public class JobScheduler implements IJobScheduler {
     }
 
     /**
+     * Schedule a one-shot job with retry and/or lease semantics.
+     * Any combination of maxRetries > 0 and leaseTimeoutMs > 0 is valid.
+     */
+    @Override
+    public String scheduleWithOptions(Runnable task, long delayMs,
+                                      int maxRetries, long retryDelayMs, long leaseTimeoutMs) {
+        Job job = new Job(task, delayMs, 0, JobType.ONCE, maxRetries, retryDelayMs, leaseTimeoutMs);
+        jobQueue.enqueue(job);
+        return job.getId();
+    }
+
+    /**
      * Cancel by ID. Removes from registry immediately (O(1)).
-     * The job may still be in the PriorityQueue (lazy deletion) — when it
-     * eventually reaches the head, dispatch() checks CANCELLED status and skips it.
-     *
-     * CAS PENDING→CANCELLED: if the job is already RUNNING, the CAS fails
-     * (status stays RUNNING). The running task completes, but reschedule()
-     * finds the job missing from the registry and does not re-enqueue it.
+     * If the job is already RUNNING, the CAS PENDING→CANCELLED fails (status
+     * stays RUNNING). The task finishes, but reschedule()/handleFailure()
+     * find the job missing from the registry and do not re-enqueue it.
      */
     @Override
     public boolean cancel(String jobId) {
-        Job job = jobQueue.remove(jobId); // atomic registry removal
-        if (job == null) return false;    // already done/cancelled/unknown
+        Job job = jobQueue.remove(jobId);
+        if (job == null) return false;
         job.compareAndSetStatus(JobStatus.PENDING, JobStatus.CANCELLED);
         return true;
     }
 
     /**
-     * Graceful shutdown sequence:
-     *   1. Set running=false so the dispatch loop exits after the current iteration.
-     *   2. jobQueue.shutdown() wakes the dispatcher if it's blocked in awaitNext().
-     *   3. taskExecutor.shutdown() stops accepting new tasks.
-     *   4. awaitTermination() waits up to 5s for in-flight worker tasks to finish.
+     * Graceful shutdown:
+     *   1. running=false → dispatch loop exits after current iteration.
+     *   2. jobQueue.shutdown() → unblocks the dispatcher if sleeping.
+     *   3. leaseExecutor.shutdown() → stops accepting new leased tasks.
+     *   4. taskExecutor.shutdown() + awaitTermination → drain in-flight workers.
      */
     @Override
     public void shutdown() {
         running = false;
-        jobQueue.shutdown();    // unblocks dispatcher thread
+        jobQueue.shutdown();
+        leaseExecutor.shutdown();
         taskExecutor.shutdown();
         try {
             taskExecutor.awaitTermination(5, TimeUnit.SECONDS);

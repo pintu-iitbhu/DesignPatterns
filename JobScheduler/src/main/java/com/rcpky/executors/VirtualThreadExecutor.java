@@ -2,6 +2,7 @@ package com.rcpky.executors;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +39,11 @@ public class VirtualThreadExecutor implements ITaskExecutor {
     @Override
     public void execute(Runnable task) {
         pool.submit(task); // spawns a new virtual thread immediately
+    }
+
+    @Override
+    public Future<?> submit(Runnable task) {
+        return pool.submit(task);
     }
 
     @Override

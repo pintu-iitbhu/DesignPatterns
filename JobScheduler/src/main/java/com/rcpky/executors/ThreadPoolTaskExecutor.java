@@ -1,6 +1,7 @@
 package com.rcpky.executors;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +44,11 @@ public class ThreadPoolTaskExecutor implements ITaskExecutor {
         // exceptions. runJob() in JobScheduler has its own try-catch, so this
         // is intentional — exception handling is our responsibility, not the pool's.
         pool.submit(task);
+    }
+
+    @Override
+    public Future<?> submit(Runnable task) {
+        return pool.submit(task);
     }
 
     @Override

@@ -24,14 +24,14 @@ import java.util.concurrent.TimeoutException;
  *
  * Thread model:
  *   dispatcher thread  — single thread; calls jobQueue.awaitNext() in a loop.
- *                         Blocks inside the queue until a job is due, then
- *                         hands it to the worker pool. Never does real work.
- *   worker thread pool — N threads running runJob() concurrently.
- *                         Slow jobs don't block the dispatcher or each other.
- *   lease executor     — unbounded cached pool; used only when leaseTimeoutMs>0.
- *                         The worker thread submits the task here and blocks on
- *                         Future.get(leaseTimeoutMs) to enforce the timeout.
- *                         Separate from the worker pool to avoid deadlocks.
+ *                         Hands due jobs to either taskExecutor or leaseExecutor.
+ *   taskExecutor       — fixed pool; runs NON-leased jobs only. Never blocks.
+ *   leaseExecutor      — unbounded cached pool; runs leased jobs.
+ *                         Two threads are consumed per leased job:
+ *                           Thread B (monitor) — runs runJob(), blocks on Future.get(leaseMs)
+ *                           Thread C (worker)  — runs job.getTask() via leaseExecutor.submit()
+ *                         Because the cached pool is unbounded, blocking Thread B never
+ *                         starves Thread C or any other job. Fixed pool is never touched.
  */
 public class JobScheduler implements IJobScheduler {
 
@@ -94,7 +94,14 @@ public class JobScheduler implements IJobScheduler {
 
                 // Lazy deletion check: job was cancelled while waiting in the heap.
                 if (job.getStatus() != JobStatus.CANCELLED) {
-                    taskExecutor.execute(() -> runJob(job));
+                    // Leased jobs go to the unbounded cached pool so that the
+                    // monitor thread (blocking on future.get) never occupies a
+                    // fixed-pool slot. Non-leased jobs run on the fixed pool.
+                    if (job.getLeaseTimeoutMs() > 0) {
+                        leaseExecutor.execute(() -> runJob(job));
+                    } else {
+                        taskExecutor.execute(() -> runJob(job));
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

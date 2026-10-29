@@ -1,106 +1,143 @@
 package com.rcpky.core;
 
+import com.rcpky.dlq.IDeadLetterQueue;
 import com.rcpky.filter.MessageFilter;
 import com.rcpky.model.Message;
+import com.rcpky.retention.RetentionPolicy;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Central broker — the single entry-point for publishers and subscribers.
+ * Implements IBroker; all production code should depend on the interface.
  *
- * Responsibilities:
- *   - Topic registry (create / lookup)
- *   - Route publish() calls to the correct Topic
- *   - Delegate subscribe / unsubscribe / pause / resume to Topic
- *
- * Singleton: one broker per JVM process (reset() provided for testing).
+ * Singleton: one broker per JVM process. Use reset() between test scenarios.
+ * DLQ: pass an IDeadLetterQueue to getInstance(dlq) / reset(dlq) to capture
+ *      messages that fail delivery after all retries.
  *
  * Thread safety:
  *   - getInstance() / reset() are synchronized on Broker.class.
- *   - topics uses ConcurrentHashMap so createTopic / publish / subscribe
- *     can run from any thread without external locking.
- *   - All mutation inside a Topic is guarded by the Topic's own monitor.
+ *   - topics uses ConcurrentHashMap; per-topic state is guarded by each
+ *     Topic's intrinsic lock.
+ *   - Per-subscriber delivery runs in a dedicated single-thread executor
+ *     (message order guaranteed, publisher thread never blocked).
  *
- * Extension: replace the singleton with dependency-injection; add a
- *            MessageDispatcher (ExecutorService) for async push delivery.
+ * Extension: replace singleton with DI; wire IBroker throughout.
  */
-public class Broker {
+public class Broker implements IBroker {
 
     private static Broker instance;
 
     private final Map<String, Topic> topics;
+    private final IDeadLetterQueue   dlq;
 
-    private Broker() {
+    private Broker(IDeadLetterQueue dlq) {
         this.topics = new ConcurrentHashMap<>();
+        this.dlq    = dlq;
     }
 
-    /** Thread-safe singleton access. */
+    /** Thread-safe singleton access (no DLQ). */
     public static synchronized Broker getInstance() {
         if (instance == null) {
-            instance = new Broker();
+            instance = new Broker(null);
         }
         return instance;
     }
 
-    /** Wipe all state — useful between test scenarios. */
+    /** Thread-safe singleton access — wires a DLQ on first call only. */
+    public static synchronized Broker getInstance(IDeadLetterQueue dlq) {
+        if (instance == null) {
+            instance = new Broker(dlq);
+        }
+        return instance;
+    }
+
+    /** Shut down the current instance and create a fresh one (no DLQ). */
     public static synchronized void reset() {
-        instance = new Broker();
+        if (instance != null) instance.shutdown();
+        instance = new Broker(null);
+    }
+
+    /** Shut down the current instance and create a fresh one with a DLQ. */
+    public static synchronized void reset(IDeadLetterQueue dlq) {
+        if (instance != null) instance.shutdown();
+        instance = new Broker(dlq);
     }
 
     // ─── Topic Management ────────────────────────────────────────────────────
 
-    /** Create a topic explicitly. Idempotent — safe to call multiple times. */
+    @Override
     public void createTopic(String topicName) {
-        topics.putIfAbsent(topicName, new Topic(topicName));
+        createTopic(topicName, RetentionPolicy.UNLIMITED);
+    }
+
+    @Override
+    public void createTopic(String topicName, RetentionPolicy policy) {
+        topics.putIfAbsent(topicName, new Topic(topicName, policy));
     }
 
     // ─── Publisher API ───────────────────────────────────────────────────────
 
+    @Override
     public void publish(String topicName, String payload) {
         publish(topicName, payload, null);
     }
 
+    @Override
     public void publish(String topicName, String payload, Map<String, String> metadata) {
-        Topic topic = getTopicOrThrow(topicName);
         Message msg = new Message(topicName, payload, metadata);
-        topic.publish(msg);
+        getTopicOrThrow(topicName).publish(msg);
     }
 
     // ─── Subscriber API ──────────────────────────────────────────────────────
 
-    /** Subscribe without a filter — receives every message. */
+    @Override
     public void subscribe(String topicName, ISubscriber subscriber) {
-        subscribe(topicName, subscriber, null);
+        subscribe(topicName, subscriber, null, 0);
     }
 
-    /** Subscribe with an optional filter predicate. */
+    @Override
     public void subscribe(String topicName, ISubscriber subscriber, MessageFilter filter) {
-        Topic topic = getTopicOrThrow(topicName);
-        topic.subscribe(subscriber, filter);
+        subscribe(topicName, subscriber, filter, 0);
     }
 
+    @Override
+    public void subscribe(String topicName, ISubscriber subscriber,
+                          MessageFilter filter, int maxRetries) {
+        getTopicOrThrow(topicName).subscribe(subscriber, filter, maxRetries, dlq);
+    }
+
+    @Override
     public void unsubscribe(String topicName, String subscriberId) {
         getTopicOrThrow(topicName).unsubscribe(subscriberId);
     }
 
     // ─── Availability Control ────────────────────────────────────────────────
 
-    /**
-     * Mark a subscriber as temporarily unavailable on a topic.
-     * Messages published during the pause period accumulate in the topic log
-     * and are delivered in full, in order, when the subscriber resumes.
-     */
+    @Override
     public void pause(String topicName, String subscriberId) {
         getTopicOrThrow(topicName).pause(subscriberId);
     }
 
-    /**
-     * Resume a paused subscriber — triggers immediate catch-up delivery
-     * of all messages missed during the pause.
-     */
+    @Override
     public void resume(String topicName, String subscriberId) {
         getTopicOrThrow(topicName).resume(subscriberId);
+    }
+
+    // ─── Lifecycle ───────────────────────────────────────────────────────────
+
+    @Override
+    public void awaitAllDeliveries() throws InterruptedException {
+        for (Topic topic : topics.values()) {
+            topic.awaitDelivery();
+        }
+    }
+
+    @Override
+    public void shutdown() {
+        topics.values().forEach(Topic::shutdown);
+        topics.clear();
     }
 
     // ─── Internal helpers ────────────────────────────────────────────────────

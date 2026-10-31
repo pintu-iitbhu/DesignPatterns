@@ -6,6 +6,197 @@ Design a configurable, extensible **Accounting Engine** that can evaluate financ
 
 ---
 
+## Before You Start: Clarifying Questions to Ask the Interviewer
+
+> Ask these **before writing a single line of code**. They signal seniority, prevent wasted design, and often unlock hidden constraints that change the entire approach.
+
+---
+
+### 1. Transaction Model
+
+> *"What does a transaction look like? What attributes does it carry?"*
+
+- Does a transaction have a fixed schema (amount, currency, type) or is it a free-form key-value bag?
+- What types of transactions do we need to support? (debit, credit, refund, reversal, transfer?)
+- Is `amount` always positive, or can it be negative (for reversals)?
+- Do transactions carry metadata for custom attributes (e.g., `deviceType`, `geoLocation`, `merchantCategory`)?
+- Is `transactionId` guaranteed unique per event, or can the same logical transaction arrive multiple times (retries)?
+
+**What this unlocks:** Whether `Transaction` is a record with typed fields or a generic `Map<String, Object>`, and whether you need idempotency handling at all.
+
+---
+
+### 2. Rules — Structure and Configuration
+
+> *"What is a rule? How is it defined and who manages it?"*
+
+- Is a rule just a condition + action, or does it have more structure (priority, groups, tags)?
+- Who configures rules — engineers via code, or business users via a UI / config file / DB?
+- Do rules need to be created, updated, and deleted **at runtime** without a redeploy?
+- Can rules be **enabled/disabled** without deleting them (for A/B testing or rollback)?
+- Should rule changes take effect **immediately** or only on the next deployment?
+- Is there a maximum number of rules we should design for? (10s? 1000s?)
+
+**What this unlocks:** Whether `RuleRepository` is in-memory (simple) or DB-backed with caching, and whether the engine needs a `ReadWriteLock` around rule reads.
+
+---
+
+### 3. Conditions — Complexity and Operators
+
+> *"What can a condition check, and how complex can it be?"*
+
+- Which transaction fields can conditions check? (amount, currency, merchant, payment method, type, status, metadata?)
+- What operators are needed? (equals, greater than, less than, between, IN set, regex?)
+- Do we need **composite conditions** — AND, OR, NOT across multiple sub-conditions?
+- Can conditions be **nested** (e.g., `(A AND B) OR (C AND NOT D)`)?
+- Should conditions be data-driven (stored as JSON in DB) or code-driven (Java classes)?
+
+**What this unlocks:** Whether you need `CompositeCondition` + recursive condition trees, and whether you need a `ConditionSerializer` to persist conditions.
+
+---
+
+### 4. Actions — What Can a Rule Do?
+
+> *"When a rule matches, what can it do to the transaction?"*
+
+- Can a rule **score** a transaction (add a risk score)?
+- Can a rule **flag** a transaction with a named label (e.g., `HIGH_VALUE`, `SUSPICIOUS`)?
+- Can a rule **reject/block** a transaction immediately?
+- Can a rule generate **ledger entries** (debit/credit accounting records)?
+- Can a rule **categorize** a transaction (e.g., `INTERNATIONAL`, `LARGE_TRANSACTION`)?
+- Can a rule trigger multiple actions (e.g., flag AND score AND categorize)?
+- Should a rejection stop processing all remaining rules, or should all rules run regardless?
+
+**What this unlocks:** The full set of `RuleAction` implementations needed, and whether `ChainedAction` (Composite pattern) is required.
+
+---
+
+### 5. Scoring and Risk
+
+> *"How is the final score computed and what does it represent?"*
+
+- Does every matched rule contribute a score delta, or does only the highest-priority match count?
+- Can scores be negative (e.g., a rule that reduces risk)?
+- Are risk levels required? (LOW / MEDIUM / HIGH / CRITICAL) What are the thresholds?
+- Should the score be part of the returned result, or is it only used internally for decisions?
+- Can a score threshold auto-reject a transaction? (e.g., score > 90 → auto-reject)
+
+**What this unlocks:** Whether `ScoreCalculator` thresholds are hardcoded or configurable, and whether score-based auto-rejection is needed.
+
+---
+
+### 6. Ledger and Accounting
+
+> *"Do we need to generate accounting entries from transactions?"*
+
+- Is **double-entry bookkeeping** required? (every debit must have an equal credit)
+- What does a ledger entry look like? (accountId, amount, type, description?)
+- Should ledger entries only be persisted if the transaction is fully approved and balanced?
+- What happens if ledger entries are **imbalanced** — fail the transaction or log and continue?
+- Do we need to support **reversals/refunds** that mirror the original ledger entries?
+- Are ledger entries append-only, or can they be corrected/amended?
+
+**What this unlocks:** Whether `LedgerValidator` and `LedgerRepository` are needed, and whether `ReversalAction` is in scope.
+
+---
+
+### 7. Idempotency and Duplicate Handling
+
+> *"What happens if the same transaction is submitted twice?"*
+
+- Is the `transactionId` a globally unique idempotency key?
+- Should re-processing the same ID return the **cached result** from the first run?
+- Or should it be re-evaluated fresh each time?
+- How long should processed events be remembered? (indefinitely? TTL?)
+- What should be logged when a duplicate is detected?
+
+**What this unlocks:** Whether `ProcessedEventStore` is needed, and whether it's in-memory (simple) or Redis-backed (distributed).
+
+---
+
+### 8. Audit Trail
+
+> *"Do we need to record what happened during processing?"*
+
+- Is an audit trail required? (which rules fired, which were skipped, final outcome?)
+- Should the audit log be **append-only** (no updates or deletes)?
+- Who consumes the audit trail — internal systems, compliance teams, end users?
+- Does audit need to be queryable by `transactionId`? By time range? By rule?
+- Should audit events be synchronous (blocking) or async (fire-and-forget)?
+
+**What this unlocks:** Whether `AuditRepository` is append-only in-memory or a Kafka event stream, and the granularity of audit events.
+
+---
+
+### 9. Concurrency and Scale
+
+> *"How many transactions per second do we need to handle?"*
+
+- Is this a **single-node** in-process library or a **distributed service**?
+- What is the expected TPS (transactions per second)? (1? 1000? 100,000?)
+- Can multiple transactions be evaluated **concurrently** on the same engine instance?
+- Can rules be **updated concurrently** while transactions are being processed?
+- Is there a latency SLA per transaction evaluation? (e.g., < 5ms P99?)
+
+**What this unlocks:** Whether you need `ConcurrentHashMap`, `ReadWriteLock` on rule updates, thread-pool sizing, or async processing entirely.
+
+---
+
+### 10. Extensibility and Future Growth
+
+> *"How much flexibility do we need to add new rule types later?"*
+
+- Will new condition types be added frequently? (e.g., `GeoCondition`, `VelocityCondition`, `MLScoreCondition`)
+- Will new action types be added? (e.g., `WebhookAction`, `AlertAction`, `FreezeAccountAction`)
+- Should the engine support **rule versioning** — so we can replay how a transaction was evaluated under old rules?
+- Should conditions be **serializable to/from JSON** so they can be stored in a DB and loaded at runtime?
+- Will different clients need different rule sets (multi-tenancy)?
+
+**What this unlocks:** Whether `RuleCondition` as a `@FunctionalInterface` is enough, or if you need a serializable `ConditionSpec` with a `ConditionFactory`.
+
+---
+
+### 11. Error Handling
+
+> *"What should happen when something goes wrong during evaluation?"*
+
+- If a **rule condition throws an exception** (e.g., null pointer in a custom condition), should evaluation fail fast or skip that rule and continue?
+- If a **rule action throws**, should the transaction be rejected or marked as errored?
+- Should errors in one rule affect other rules in the pipeline?
+- Is there a **dead-letter queue** for transactions that could not be processed?
+- Should error details appear in the audit trail?
+
+**What this unlocks:** Whether you wrap each rule evaluation in try-catch and what the failure `EngineStatus` values should be.
+
+---
+
+### 12. Output / API Contract
+
+> *"What does the caller get back after evaluation?"*
+
+- Is a simple pass/fail enough, or do callers need the full breakdown (which rules fired, final score, risk level, rejection reason)?
+- Should `ledgerEntries` be returned in the result, or only persisted internally?
+- Do callers need to query results later by `transactionId`?
+- Is there a need for a **dry-run mode** — evaluate rules but don't persist any ledger entries or audit events?
+
+**What this unlocks:** The shape of `EngineResult`, whether `getLedgerEntries(txId)` and `getAuditTrail(txId)` APIs are needed, and whether a dry-run flag is required.
+
+---
+
+### Quick Reference — Minimum Viable Clarifications
+
+If the interviewer says *"just start building"*, lock down at least these five before touching code:
+
+| # | Question | Why It Matters |
+|---|---|---|
+| 1 | What does a transaction look like? | Drives the entire domain model |
+| 2 | What can a rule condition check? | Determines condition class hierarchy |
+| 3 | What can a rule action do? | Determines action class hierarchy |
+| 4 | Is double-entry ledger needed? | Major scope difference |
+| 5 | Single node or distributed? | Determines all concurrency decisions |
+
+---
+
 ## Functional Requirements
 
 | # | Requirement |

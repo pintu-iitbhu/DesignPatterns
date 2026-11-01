@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Wallet Service</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --primary: #4f46e5;
+            --primary-h: #4338ca;
+            --credit: #059669;
+            --debit: #dc2626;
+            --transfer: #2563eb;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+            --radius: 10px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--primary);
+            color: #fff;
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, .4);
+        }
+
+        header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -.02em;
+        }
+
+        header span {
+            font-size: .85rem;
+            opacity: .75;
+        }
+
+        .layout {
+            display: flex;
+            gap: 20px;
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 300px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px;
+        }
+
+        .card-title {
+            font-size: .8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        /* create wallet form */
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: .78rem;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: .875rem;
+            outline: none;
+            transition: border .15s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, .12);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: .85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s, transform .1s;
+            width: 100%;
+        }
+
+        .btn:active {
+            transform: scale(.98);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-h);
+        }
+
+        .btn-credit {
+            background: var(--credit);
+            color: #fff;
+        }
+
+        .btn-credit:hover {
+            background: #047857;
+        }
+
+        .btn-debit {
+            background: var(--debit);
+            color: #fff;
+        }
+
+        .btn-debit:hover {
+            background: #b91c1c;
+        }
+
+        .btn-transfer {
+            background: var(--transfer);
+            color: #fff;
+        }
+
+        .btn-transfer:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(79, 70, 229, .06);
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: .8rem;
+            width: auto;
+        }
+
+        /* wallet list */
+        .wallet-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: background .12s;
+            border: 1px solid transparent;
+        }
+
+        .wallet-item:hover {
+            background: #f8fafc;
+        }
+
+        .wallet-item.active {
+            background: #eef2ff;
+            border-color: #c7d2fe;
+        }
+
+        .wallet-item .wi-name {
+            font-size: .875rem;
+            font-weight: 600;
+        }
+
+        .wallet-item .wi-bal {
+            font-size: .8rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .wallet-item .wi-cur {
+            font-size: .7rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            background: #e0e7ff;
+            color: #4338ca;
+            border-radius: 999px;
+        }
+
+        .wallet-empty {
+            font-size: .85rem;
+            color: var(--muted);
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* ── MAIN ── */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .placeholder {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+            gap: 10px;
+            padding: 60px;
+        }
+
+        .placeholder svg {
+            opacity: .25;
+        }
+
+        .placeholder p {
+            font-size: .9rem;
+        }
+
+        /* wallet detail header */
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px 22px;
+            background: var(--primary);
+            border-radius: var(--radius);
+            color: #fff;
+        }
+
+        .detail-header .name {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .detail-header .id {
+            font-size: .72rem;
+            opacity: .65;
+            margin-top: 3px;
+            font-family: monospace;
+        }
+
+        .detail-header .balance {
+            text-align: right;
+        }
+
+        .detail-header .bal-label {
+            font-size: .75rem;
+            opacity: .7;
+        }
+
+        .detail-header .bal-amount {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
+        .detail-header .cur-badge {
+            font-size: .7rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, .2);
+            padding: 2px 8px;
+            border-radius: 999px;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        /* action tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 9px;
+            border: none;
+            border-radius: 6px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s;
+            background: #f1f5f9;
+            color: var(--muted);
+        }
+
+        .tab-btn.active-credit {
+            background: var(--credit);
+            color: #fff;
+        }
+
+        .tab-btn.active-debit {
+            background: var(--debit);
+            color: #fff;
+        }
+
+        .tab-btn.active-transfer {
+            background: var(--transfer);
+            color: #fff;
+        }
+
+        .tab-btn:hover:not([class*="active"]) {
+            background: #e2e8f0;
+            color: var(--text);
+        }
+
+        .action-panel {
+            display: none;
+        }
+
+        .action-panel.visible {
+            display: block;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .action-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .action-row .btn {
+            width: auto;
+            white-space: nowrap;
+        }
+
+        /* transaction table */
+        .txn-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .835rem;
+        }
+
+        .txn-table th {
+            text-align: left;
+            padding: 8px 12px;
+            font-size: .75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--muted);
+            border-bottom: 1px solid var(--border);
+            background: #f8fafc;
+        }
+
+        .txn-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+        .txn-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .txn-table tr:hover td {
+            background: #fafafa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .badge-credit {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-debit {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-transfer_in {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-transfer_out {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+
+        .amount-credit {
+            color: var(--credit);
+            font-weight: 700;
+        }
+
+        .amount-debit {
+            color: var(--debit);
+            font-weight: 700;
+        }
+
+        .amount-transfer_in {
+            color: var(--transfer);
+            font-weight: 700;
+        }
+
+        .amount-transfer_out {
+            color: #7c3aed;
+            font-weight: 700;
+        }
+
+        .sign-credit {
+            color: var(--credit);
+        }
+
+        .sign-debit {
+            color: var(--debit);
+        }
+
+        .sign-transfer_in {
+            color: var(--transfer);
+        }
+
+        .sign-transfer_out {
+            color: #7c3aed;
+        }
+
+        .txn-empty {
+            text-align: center;
+            padding: 30px;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 999;
+        }
+
+        .toast {
+            padding: 12px 18px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: .85rem;
+            font-weight: 500;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, .15);
+            animation: fadeIn .2s ease;
+            max-width: 320px;
+        }
+
+        .toast-success {
+            background: var(--credit);
+        }
+
+        .toast-error {
+            background: var(--debit);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+
+        @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+                padding: 16px;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
+         stroke-linejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <path d="M16 12h.01"/>
+        <path d="M2 10h20"/>
+    </svg>
+    <div>
+        <h1>Wallet Service</h1>
+        <span>In-memory wallet management</span>
+    </div>
+</header>
+
+<div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <!-- Create Wallet -->
+        <div class="card">
+            <div class="card-title">Create Wallet</div>
+            <div class="form-group">
+                <label>Owner Name</label>
+                <input type="text" id="cw-name" placeholder="Alice"/>
+            </div>
+            <div class="form-group">
+                <label>Currency</label>
+                <select id="cw-currency">
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="INR">INR</option>
+                    <option value="JPY">JPY</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Initial Balance</label>
+                <input type="number" id="cw-balance" placeholder="0.00" min="0" step="0.01"/>
+            </div>
+            <button class="btn btn-primary" onclick="createWallet()">+ Create Wallet</button>
+        </div>
+
+        <!-- Wallet List -->
+        <div class="card" style="flex:1">
+            <div class="card-title">Wallets <span id="wallet-count"
+                                                  style="font-weight:400;text-transform:none;letter-spacing:0"></span>
+            </div>
+            <div id="wallet-list">
+                <div class="wallet-empty">No wallets yet</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main" id="main-panel">
+        <div class="placeholder" id="placeholder">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <path d="M16 12h.01"/>
+                <path d="M2 10h20"/>
+            </svg>
+            <p>Select a wallet to get started</p>
+        </div>
+
+        <div id="wallet-detail" style="display:none; display:flex; flex-direction:column; gap:16px;">
+
+            <!-- Balance card -->
+            <div class="detail-header" id="detail-header"></div>
+
+            <!-- Actions -->
+            <div class="card">
+                <div class="card-title">Actions</div>
+                <div class="tabs" style="margin-bottom:14px">
+                    <button class="tab-btn" onclick="showTab('credit')" id="tab-credit">Credit</button>
+                    <button class="tab-btn" onclick="showTab('debit')" id="tab-debit">Debit</button>
+                    <button class="tab-btn" onclick="showTab('transfer')" id="tab-transfer">Transfer</button>
+                </div>
+
+                <!-- Credit panel -->
+                <div id="panel-credit" class="action-panel">
+                    <div class="action-row">
+                        <div class="form-group"><label>Amount</label><input type="number" id="credit-amount"
+                                                                            placeholder="0.00" min="0.01" step="0.01"/>
+                        </div>
+                        <div class="form-group"><label>Description</label><input type="text" id="credit-desc"
+                                                                                 placeholder="Salary, refund…"/></div>
+                        <button class="btn btn-credit btn-sm" onclick="doCredit()">Credit</button>
+                    </div>
+                </div>
+
+                <!-- Debit panel -->
+                <div id="panel-debit" class="action-panel">
+                    <div class="action-row">
+                        <div class="form-group"><label>Amount</label><input type="number" id="debit-amount"
+                                                                            placeholder="0.00" min="0.01" step="0.01"/>
+                        </div>
+                        <div class="form-group"><label>Description</label><input type="text" id="debit-desc"
+                                                                                 placeholder="Purchase, bill…"/></div>
+                        <button class="btn btn-debit btn-sm" onclick="doDebit()">Debit</button>
+                    </div>
+                </div>
+
+                <!-- Transfer panel -->
+                <div id="panel-transfer" class="action-panel">
+                    <div class="action-row">
+                        <div class="form-group">
+                            <label>To Wallet</label>
+                            <select id="transfer-to"></select>
+                        </div>
+                        <div class="form-group"><label>Amount</label><input type="number" id="transfer-amount"
+                                                                            placeholder="0.00" min="0.01" step="0.01"/>
+                        </div>
+                        <div class="form-group"><label>Description</label><input type="text" id="transfer-desc"
+                                                                                 placeholder="Rent, split…"/></div>
+                        <button class="btn btn-transfer btn-sm" onclick="doTransfer()">Transfer</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction History -->
+            <div class="card">
+                <div class="card-title"
+                     style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center">
+                    <span>Transaction History</span>
+                    <button class="btn btn-ghost btn-sm" onclick="loadTransactions(selectedWalletId)">Refresh</button>
+                </div>
+                <div id="txn-container" style="margin-top:14px">
+                    <div class="loading">Loading…</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+    let selectedWalletId = null;
+    let allWallets = [];
+
+    const API = '/api/wallets';
+
+    async function api(method, path, body) {
+        const opts = {method, headers: {'Content-Type': 'application/json'}};
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(API + path, opts);
+        return res.json();
+    }
+
+    function toast(msg, type = 'success') {
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = msg;
+        document.getElementById('toasts').appendChild(el);
+        setTimeout(() => el.remove(), 3500);
+    }
+
+    /* ── Wallet list ── */
+    async function loadWallets() {
+        const res = await api('GET', '');
+        if (!res.success) return;
+        allWallets = res.data.sort((a, b) => a.ownerName.localeCompare(b.ownerName));
+        renderWalletList();
+    }
+
+    function renderWalletList() {
+        const el = document.getElementById('wallet-list');
+        document.getElementById('wallet-count').textContent = `(${allWallets.length})`;
+        if (!allWallets.length) {
+            el.innerHTML = '<div class="wallet-empty">No wallets yet</div>';
+            return;
+        }
+        el.innerHTML = allWallets.map(w => `
+      <div class="wallet-item ${w.id === selectedWalletId ? 'active' : ''}" onclick="selectWallet('${w.id}')">
+        <div>
+          <div class="wi-name">${esc(w.ownerName)}</div>
+          <div class="wi-bal">${formatAmount(w.balance)} <span class="wi-cur">${w.currency}</span></div>
+        </div>
+      </div>`).join('');
+    }
+
+    async function selectWallet(id) {
+        selectedWalletId = id;
+        renderWalletList();
+
+        const res = await api('GET', `/${id}`);
+        if (!res.success) {
+            toast(res.error, 'error');
+            return;
+        }
+        const w = res.data;
+
+        document.getElementById('placeholder').style.display = 'none';
+        const det = document.getElementById('wallet-detail');
+        det.style.display = 'flex';
+
+        document.getElementById('detail-header').innerHTML = `
+      <div>
+        <div class="name">${esc(w.ownerName)}</div>
+        <div class="id">${w.id}</div>
+      </div>
+      <div class="balance">
+        <div class="bal-label">Current Balance</div>
+        <div class="bal-amount">${formatAmount(w.balance)}</div>
+        <div class="cur-badge">${w.currency}</div>
+      </div>`;
+
+        populateTransferDropdown(w.id);
+        showTab(null);
+        await loadTransactions(id);
+    }
+
+    function populateTransferDropdown(currentId) {
+        const sel = document.getElementById('transfer-to');
+        sel.innerHTML = allWallets
+            .filter(w => w.id !== currentId)
+            .map(w => `<option value="${w.id}">${esc(w.ownerName)} (${w.currency})</option>`)
+            .join('');
+        if (!sel.options.length) sel.innerHTML = '<option disabled>No other wallets</option>';
+    }
+
+    /* ── Create wallet ── */
+    async function createWallet() {
+        const ownerName = document.getElementById('cw-name').value.trim();
+        const currency = document.getElementById('cw-currency').value;
+        const initialBalance = parseFloat(document.getElementById('cw-balance').value) || 0;
+        if (!ownerName) {
+            toast('Owner name is required', 'error');
+            return;
+        }
+        const res = await api('POST', '', {ownerName, currency, initialBalance});
+        if (!res.success) {
+            toast(res.error, 'error');
+            return;
+        }
+        toast(`Wallet created for ${ownerName}`);
+        document.getElementById('cw-name').value = '';
+        document.getElementById('cw-balance').value = '';
+        await loadWallets();
+        selectWallet(res.data.id);
+    }
+
+    /* ── Tabs ── */
+    function showTab(tab) {
+        ['credit', 'debit', 'transfer'].forEach(t => {
+            document.getElementById(`panel-${t}`).classList.toggle('visible', t === tab);
+            const btn = document.getElementById(`tab-${t}`);
+            btn.className = 'tab-btn' + (t === tab ? ` active-${t}` : '');
+        });
+    }
+
+    /* ── Credit ── */
+    async function doCredit() {
+        const amount = parseFloat(document.getElementById('credit-amount').value);
+        const description = document.getElementById('credit-desc').value.trim() || 'Credit';
+        if (!amount || amount <= 0) {
+            toast('Enter a valid amount', 'error');
+            return;
+        }
+        const res = await api('POST', `/${selectedWalletId}/credit`, {amount, description});
+        if (!res.success) {
+            toast(res.error, 'error');
+            return;
+        }
+        toast(`Credited ${formatAmount(amount)}`);
+        document.getElementById('credit-amount').value = '';
+        document.getElementById('credit-desc').value = '';
+        await refreshDetail();
+    }
+
+    /* ── Debit ── */
+    async function doDebit() {
+        const amount = parseFloat(document.getElementById('debit-amount').value);
+        const description = document.getElementById('debit-desc').value.trim() || 'Debit';
+        if (!amount || amount <= 0) {
+            toast('Enter a valid amount', 'error');
+            return;
+        }
+        const res = await api('POST', `/${selectedWalletId}/debit`, {amount, description});
+        if (!res.success) {
+            toast(res.error, 'error');
+            return;
+        }
+        toast(`Debited ${formatAmount(amount)}`);
+        document.getElementById('debit-amount').value = '';
+        document.getElementById('debit-desc').value = '';
+        await refreshDetail();
+    }
+
+    /* ── Transfer ── */
+    async function doTransfer() {
+        const toWalletId = document.getElementById('transfer-to').value;
+        const amount = parseFloat(document.getElementById('transfer-amount').value);
+        const description = document.getElementById('transfer-desc').value.trim() || 'Transfer';
+        if (!toWalletId) {
+            toast('Select a destination wallet', 'error');
+            return;
+        }
+        if (!amount || amount <= 0) {
+            toast('Enter a valid amount', 'error');
+            return;
+        }
+        const res = await api('POST', `/${selectedWalletId}/transfer`, {toWalletId, amount, description});
+        if (!res.success) {
+            toast(res.error, 'error');
+            return;
+        }
+        toast(`Transferred ${formatAmount(amount)}`);
+        document.getElementById('transfer-amount').value = '';
+        document.getElementById('transfer-desc').value = '';
+        await loadWallets();
+        await refreshDetail();
+    }
+
+    async function refreshDetail() {
+        await loadWallets();
+        if (selectedWalletId) await selectWallet(selectedWalletId);
+    }
+
+    /* ── Transactions ── */
+    async function loadTransactions(walletId) {
+        const container = document.getElementById('txn-container');
+        container.innerHTML = '<div class="loading">Loading…</div>';
+        const res = await api('GET', `/${walletId}/transactions`);
+        if (!res.success) {
+            container.innerHTML = `<div class="txn-empty">${res.error}</div>`;
+            return;
+        }
+        const txns = res.data;
+        if (!txns.length) {
+            container.innerHTML = '<div class="txn-empty">No transactions yet</div>';
+            return;
+        }
+        const sign = t => (['CREDIT', 'TRANSFER_IN'].includes(t) ? '+' : '−');
+        container.innerHTML = `
+      <table class="txn-table">
+        <thead><tr>
+          <th>Type</th><th>Description</th><th>Amount</th><th>Balance After</th><th>Date</th>
+        </tr></thead>
+        <tbody>${txns.map(t => `
+          <tr>
+            <td><span class="badge badge-${t.type.toLowerCase()}">${t.type.replace('_', ' ')}</span></td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.description)}">${esc(t.description)}</td>
+            <td class="amount-${t.type.toLowerCase()}">
+              <span class="sign-${t.type.toLowerCase()}">${sign(t.type)}</span>${formatAmount(t.amount)}
+            </td>
+            <td>${formatAmount(t.balanceAfter)}</td>
+            <td style="color:var(--muted);font-size:.78rem;white-space:nowrap">${fmtDate(t.timestamp)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    /* ── Helpers ── */
+    function formatAmount(n) {
+        return Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function fmtDate(iso) {
+        const d = new Date(iso);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ── Init ── */
+    loadWallets();
+</script>
+</body>
+</html>

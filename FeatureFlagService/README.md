@@ -4,6 +4,153 @@ An in-process Java library that an application embeds directly. No network calls
 
 ---
 
+## Clarifying Questions to Ask at the Start of the Interview
+
+Before writing a single class, ask these questions. Each unlocks or eliminates significant design decisions.
+
+---
+
+### 1. Deployment Model — Library vs Service?
+
+> "Should this run in-process inside the application, or as a separate microservice the app calls over the network?"
+
+| Answer | Implication |
+|---|---|
+| **In-process library** | Zero network latency; evaluation in nanoseconds; each app instance holds its own flag state |
+| **Microservice** | Central management, real-time flag dashboard; adds network hop (~1–5 ms) to every flag check |
+
+*Why it matters*: the entire architecture — thread model, storage, update propagation — depends on this answer.
+
+---
+
+### 2. Flag Types — What values can a flag return?
+
+> "Do flags only return true/false, or do they need to return strings and integers too — for things like A/B variants or rate-limit thresholds?"
+
+| Answer | Implication |
+|---|---|
+| **Boolean only** | Simple `Map<String, Boolean>` store |
+| **Boolean + String + Integer** | Typed `FlagValue` sealed interface; type validation at registration and evaluation time |
+| **Arbitrary JSON** | Generic `Object` or `JsonNode`; caller owns deserialization |
+
+---
+
+### 3. Targeting — What can you target on?
+
+> "Can a flag target specific users? What about tenant, country, subscription plan, or arbitrary request attributes?"
+
+| Answer | Implication |
+|---|---|
+| **User ID allowlist only** | Simple `Set<String>` membership check |
+| **User + arbitrary attributes** | Need a `Condition` model (attribute, operator, value) and an `EvaluationContext` carrying the attribute map |
+| **Nested AND/OR logic** | Flat `List<Condition>` with one `LogicOperator` (DNF) vs full expression tree (Composite pattern) |
+
+*Follow-up*: "Can rules be combined with AND and OR? Can they be nested — like (A AND B) OR (C AND D)?"
+
+---
+
+### 4. Percentage Rollout — Is gradual release required?
+
+> "Do you need to gradually roll a flag out to, say, 20% of users, and ensure the same user always gets the same result?"
+
+| Answer | Implication |
+|---|---|
+| **No** | Skip `Rollout` model entirely |
+| **Yes, sticky** | Need deterministic hashing: `CRC32(flagName + userId) % 100`; must be restart-stable |
+| **Yes, monotonic** | Need a persistent assignment store — once a user is bucketed in, they stay in even if percentage drops |
+
+*Follow-up*: "What should the bucketing key be — always `userId`, or configurable (e.g., `tenant_id` for org-level rollout)?"
+
+---
+
+### 5. Default Behaviour — What happens when a flag doesn't exist?
+
+> "If the application evaluates a flag that hasn't been registered, should it throw an exception, return a caller-supplied default, or silently return false?"
+
+| Answer | Implication |
+|---|---|
+| **Throw** | Caller must catch `FlagNotFoundException`; forces explicit registration |
+| **Return false / empty** | Safer for unknown flags; risk: typos silently disable features |
+| **Caller-supplied default** | Most flexible: `getBooleanFlag("flag", ctx, false)` |
+
+---
+
+### 6. Concurrency — How are flags updated at runtime?
+
+> "Can flag definitions be updated while the application is running, without a restart? And from multiple threads simultaneously?"
+
+| Answer | Implication |
+|---|---|
+| **Immutable after startup** | No concurrency concern on the store |
+| **Updated at runtime, single writer** | `volatile` reference or `ConcurrentHashMap.put()` |
+| **Updated at runtime, multiple writers** | `ConcurrentHashMap` + immutable `FlagDefinition` records (atomic reference swap, no torn reads) |
+| **Pushed from external config server** | Need a background thread + `FlagStore` interface to swap implementations |
+
+---
+
+### 7. Scale — How many flags, how many evaluations per second?
+
+> "Roughly how many active flags are we talking about — hundreds or thousands? And what's the evaluation throughput — per-request hot path or occasional background check?"
+
+| Answer | Implication |
+|---|---|
+| **< 1,000 flags, < 10k req/s** | Simple `ConcurrentHashMap`; O(R×C) rule evaluation is negligible |
+| **10k+ flags or 100k+ req/s** | Pre-compiled decision trees, per-flag evaluation metrics, possible sharding |
+
+---
+
+### 8. Kill-switch — Can a flag be globally disabled instantly?
+
+> "Is there a way to kill a flag immediately — bypass all rules and rollout and return the default — without deleting it?"
+
+| Answer | Implication |
+|---|---|
+| **No** | Omit `isActive` field |
+| **Yes** | Add `boolean isActive` to `FlagDefinition`; `FlagEvaluator` checks it first with reason `DISABLED` |
+
+---
+
+### 9. Observability — Do callers need to know why they got a value?
+
+> "Does the caller just need the value, or do they also need to know whether it came from a rule match, rollout, or default — for logging and debugging?"
+
+| Answer | Implication |
+|---|---|
+| **Value only** | Return `Boolean` / `String` / `Integer` directly |
+| **Value + reason** | Return `EvaluationResult<T>` carrying `EvaluationReason` (RULE_MATCH, ROLLOUT, DEFAULT, DISABLED) |
+
+---
+
+### 10. Persistence — Do flags survive a process restart?
+
+> "Should registered flags be loaded from a config file or database on startup, or is it acceptable to re-register them in code?"
+
+| Answer | Implication |
+|---|---|
+| **In-code registration** | `InMemoryFlagStore` is sufficient |
+| **Config file / DB** | Need `FlagStore` interface with a file-backed or JDBC implementation; `FeatureFlagClient` loads on startup |
+
+---
+
+### Summary — What this implementation assumes
+
+Based on the above, this module is built for:
+
+| Question | Chosen answer |
+|---|---|
+| Deployment | In-process library |
+| Flag types | Boolean, String, Integer |
+| Targeting | User + arbitrary attributes, AND/OR rules, fully nestable |
+| Rollout | Sticky bucketing with configurable bucketing key (userId or any attribute) |
+| Flag not found | Throws `FlagNotFoundException` |
+| Concurrency | `ConcurrentHashMap` + immutable records; safe for concurrent reads and writes |
+| Scale | ≤ 1,000 flags, high evaluation throughput |
+| Kill-switch | Yes — `isActive` field, `DISABLED` reason |
+| Observability | `EvaluationResult<T>` with `EvaluationReason` |
+| Persistence | In-memory; `FlagStore` interface allows drop-in replacement |
+
+---
+
 ## Three Core Capabilities
 
 | Capability | What it does |

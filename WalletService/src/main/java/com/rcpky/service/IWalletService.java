@@ -13,11 +13,11 @@ public interface IWalletService {
 
     List<Wallet> getAllWallets();
 
-    Transaction credit(String walletId, BigDecimal amount, String description);
+    Transaction credit(String walletId, BigDecimal amount, String description, String idempotencyKey);
 
-    Transaction debit(String walletId, BigDecimal amount, String description);
+    Transaction debit(String walletId, BigDecimal amount, String description, String idempotencyKey);
 
-    List<Transaction> transfer(String fromWalletId, String toWalletId, BigDecimal amount, String description);
+    List<Transaction> transfer(String fromWalletId, String toWalletId, BigDecimal amount, String description, String idempotencyKey);
 
     List<Transaction> getTransactionHistory(String walletId);
 }

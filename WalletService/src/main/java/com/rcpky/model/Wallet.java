@@ -1,18 +1,37 @@
 package com.rcpky.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.locks.ReentrantLock;
 
+@Entity
+@Table(name = "wallets")
 public class Wallet {
-    private final String id;
-    private final String ownerName;
+
+    @Id
+    private String id;
+
+    @Column(nullable = false)
+    private String ownerName;
+
+    @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal balance;
-    private final String currency;
-    private final Instant createdAt;
+
+    @Column(nullable = false, length = 10)
+    private String currency;
+
+    @Column(nullable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
     private Instant updatedAt;
-    private final ReentrantLock lock = new ReentrantLock();
+
+    protected Wallet() {}
 
     public Wallet(String ownerName, String currency, BigDecimal initialBalance) {
         this.id = UUID.randomUUID().toString();
@@ -23,33 +42,12 @@ public class Wallet {
         this.updatedAt = Instant.now();
     }
 
-    public ReentrantLock getLock() {
-        return lock;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getOwnerName() {
-        return ownerName;
-    }
-
-    public BigDecimal getBalance() {
-        return balance;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+    public String getId()          { return id; }
+    public String getOwnerName()   { return ownerName; }
+    public BigDecimal getBalance() { return balance; }
+    public String getCurrency()    { return currency; }
+    public Instant getCreatedAt()  { return createdAt; }
+    public Instant getUpdatedAt()  { return updatedAt; }
 
     public void setBalance(BigDecimal balance) {
         this.balance = balance;

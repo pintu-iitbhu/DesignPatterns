@@ -13,7 +13,8 @@ import org.junit.Test;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 public class WalletServiceTest {
 
@@ -68,7 +69,7 @@ public class WalletServiceTest {
     @Test
     public void credit_success() {
         Wallet w = service.createWallet("Eve", "USD", new BigDecimal("100"));
-        Transaction t = service.credit(w.getId(), new BigDecimal("50"), "Salary");
+        Transaction t = service.credit(w.getId(), new BigDecimal("50"), "Salary", null);
         assertEquals(TransactionType.CREDIT, t.getType());
         assertEquals(0, new BigDecimal("150").compareTo(service.getWallet(w.getId()).getBalance()));
     }
@@ -77,14 +78,14 @@ public class WalletServiceTest {
     @Test(expected = WalletException.class)
     public void credit_invalidAmount_throws() {
         Wallet w = service.createWallet("Frank", "USD", BigDecimal.ZERO);
-        service.credit(w.getId(), BigDecimal.ZERO, "Bad credit");
+        service.credit(w.getId(), BigDecimal.ZERO, "Bad credit", null);
     }
 
     /* 8. Debit - balance decreases */
     @Test
     public void debit_success() {
         Wallet w = service.createWallet("Grace", "USD", new BigDecimal("200"));
-        Transaction t = service.debit(w.getId(), new BigDecimal("80"), "Groceries");
+        Transaction t = service.debit(w.getId(), new BigDecimal("80"), "Groceries", null);
         assertEquals(TransactionType.DEBIT, t.getType());
         assertEquals(0, new BigDecimal("120").compareTo(service.getWallet(w.getId()).getBalance()));
     }
@@ -93,7 +94,7 @@ public class WalletServiceTest {
     @Test(expected = WalletException.class)
     public void debit_insufficientFunds_throws() {
         Wallet w = service.createWallet("Hank", "USD", new BigDecimal("10"));
-        service.debit(w.getId(), new BigDecimal("20"), "Overdraft");
+        service.debit(w.getId(), new BigDecimal("20"), "Overdraft", null);
     }
 
     /* 10. Transfer - balances updated on both wallets */
@@ -101,7 +102,7 @@ public class WalletServiceTest {
     public void transfer_success() {
         Wallet from = service.createWallet("Ivy", "USD", new BigDecimal("500"));
         Wallet to = service.createWallet("Jack", "USD", new BigDecimal("100"));
-        List<Transaction> txns = service.transfer(from.getId(), to.getId(), new BigDecimal("200"), "Rent");
+        List<Transaction> txns = service.transfer(from.getId(), to.getId(), new BigDecimal("200"), "Rent", null);
 
         assertEquals(2, txns.size());
         TransactionType outType = txns.stream().filter(t -> t.getWalletId().equals(from.getId())).findFirst().get().getType();
@@ -117,7 +118,7 @@ public class WalletServiceTest {
     @Test(expected = WalletException.class)
     public void transfer_sameWallet_throws() {
         Wallet w = service.createWallet("Kim", "USD", new BigDecimal("100"));
-        service.transfer(w.getId(), w.getId(), new BigDecimal("10"), "Self");
+        service.transfer(w.getId(), w.getId(), new BigDecimal("10"), "Self", null);
     }
 
     /* 12. Transfer - insufficient funds fails */
@@ -125,7 +126,7 @@ public class WalletServiceTest {
     public void transfer_insufficientFunds_throws() {
         Wallet from = service.createWallet("Leo", "USD", new BigDecimal("10"));
         Wallet to = service.createWallet("Mia", "USD", BigDecimal.ZERO);
-        service.transfer(from.getId(), to.getId(), new BigDecimal("50"), "Too much");
+        service.transfer(from.getId(), to.getId(), new BigDecimal("50"), "Too much", null);
     }
 
     /* 13. Transaction history - returns newest first */
@@ -133,9 +134,9 @@ public class WalletServiceTest {
     public void getTransactionHistory_orderedByTimestamp() throws InterruptedException {
         Wallet w = service.createWallet("Nina", "USD", new BigDecimal("100"));
         Thread.sleep(2);
-        service.credit(w.getId(), new BigDecimal("50"), "First credit");
+        service.credit(w.getId(), new BigDecimal("50"), "First credit", null);
         Thread.sleep(2);
-        service.debit(w.getId(), new BigDecimal("20"), "First debit");
+        service.debit(w.getId(), new BigDecimal("20"), "First debit", null);
         List<Transaction> txns = service.getTransactionHistory(w.getId());
         assertTrue(txns.size() >= 2);
         assertTrue(txns.get(0).getTimestamp().isAfter(txns.get(txns.size() - 1).getTimestamp())
@@ -155,5 +156,27 @@ public class WalletServiceTest {
         service.createWallet("Pam", "EUR", BigDecimal.ZERO);
         List<Wallet> all = service.getAllWallets();
         assertTrue(all.size() >= 2);
+    }
+
+    /* 16. Idempotency - duplicate credit with same key returns same transaction, balance unchanged */
+    @Test
+    public void credit_idempotentKey_returnsSameTransaction() {
+        Wallet w = service.createWallet("Quinn", "USD", new BigDecimal("100"));
+        Transaction t1 = service.credit(w.getId(), new BigDecimal("50"), "Bonus", "idem-credit-001");
+        Transaction t2 = service.credit(w.getId(), new BigDecimal("50"), "Bonus", "idem-credit-001");
+        assertEquals(t1.getId(), t2.getId());
+        assertEquals(0, new BigDecimal("150").compareTo(service.getWallet(w.getId()).getBalance()));
+    }
+
+    /* 17. Idempotency - duplicate transfer with same key returns same transactions, balances unchanged */
+    @Test
+    public void transfer_idempotentKey_returnsSameTransactions() {
+        Wallet from = service.createWallet("Ray", "USD", new BigDecimal("500"));
+        Wallet to   = service.createWallet("Sam", "USD", new BigDecimal("100"));
+        List<Transaction> r1 = service.transfer(from.getId(), to.getId(), new BigDecimal("100"), "Rent", "idem-transfer-001");
+        List<Transaction> r2 = service.transfer(from.getId(), to.getId(), new BigDecimal("100"), "Rent", "idem-transfer-001");
+        assertEquals(r1.get(0).getId(), r2.get(0).getId());
+        assertEquals(0, new BigDecimal("400").compareTo(service.getWallet(from.getId()).getBalance()));
+        assertEquals(0, new BigDecimal("200").compareTo(service.getWallet(to.getId()).getBalance()));
     }
 }

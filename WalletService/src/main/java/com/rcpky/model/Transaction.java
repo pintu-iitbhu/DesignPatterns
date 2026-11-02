@@ -1,19 +1,48 @@
 package com.rcpky.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+@Entity
+@Table(name = "transactions")
 public class Transaction {
-    private final String id;
-    private final String walletId;
-    private final TransactionType type;
-    private final BigDecimal amount;
-    private final BigDecimal balanceBefore;
-    private final BigDecimal balanceAfter;
-    private final String description;
-    private final String referenceId;
-    private final Instant timestamp;
+
+    @Id
+    private String id;
+
+    @Column(nullable = false)
+    private String walletId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TransactionType type;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal amount;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal balanceBefore;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal balanceAfter;
+
+    @Column(length = 500)
+    private String description;
+
+    private String referenceId;
+
+    @Column(name = "occurred_at", nullable = false)
+    private Instant timestamp;
+
+    protected Transaction() {}
 
     public Transaction(String walletId, TransactionType type, BigDecimal amount,
                        BigDecimal balanceBefore, BigDecimal balanceAfter,

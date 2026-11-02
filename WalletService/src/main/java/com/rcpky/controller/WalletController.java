@@ -41,24 +41,30 @@ public class WalletController {
     }
 
     @PostMapping("/{id}/credit")
-    public ResponseEntity<ApiResponse<Transaction>> credit(@PathVariable String id,
-                                                           @RequestBody AmountRequest req) {
-        Transaction t = walletService.credit(id, req.getAmount(), req.getDescription());
+    public ResponseEntity<ApiResponse<Transaction>> credit(
+            @PathVariable String id,
+            @RequestBody AmountRequest req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Transaction t = walletService.credit(id, req.getAmount(), req.getDescription(), idempotencyKey);
         return ResponseEntity.ok(ApiResponse.ok(t));
     }
 
     @PostMapping("/{id}/debit")
-    public ResponseEntity<ApiResponse<Transaction>> debit(@PathVariable String id,
-                                                          @RequestBody AmountRequest req) {
-        Transaction t = walletService.debit(id, req.getAmount(), req.getDescription());
+    public ResponseEntity<ApiResponse<Transaction>> debit(
+            @PathVariable String id,
+            @RequestBody AmountRequest req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Transaction t = walletService.debit(id, req.getAmount(), req.getDescription(), idempotencyKey);
         return ResponseEntity.ok(ApiResponse.ok(t));
     }
 
     @PostMapping("/{id}/transfer")
-    public ResponseEntity<ApiResponse<List<Transaction>>> transfer(@PathVariable String id,
-                                                                   @RequestBody TransferRequest req) {
+    public ResponseEntity<ApiResponse<List<Transaction>>> transfer(
+            @PathVariable String id,
+            @RequestBody TransferRequest req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         List<Transaction> txns = walletService.transfer(id, req.getToWalletId(),
-                req.getAmount(), req.getDescription());
+                req.getAmount(), req.getDescription(), idempotencyKey);
         return ResponseEntity.ok(ApiResponse.ok(txns));
     }
 

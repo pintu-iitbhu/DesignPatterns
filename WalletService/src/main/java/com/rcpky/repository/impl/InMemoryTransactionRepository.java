@@ -2,15 +2,12 @@ package com.rcpky.repository.impl;
 
 import com.rcpky.model.Transaction;
 import com.rcpky.repository.ITransactionRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
-@Repository
 public class InMemoryTransactionRepository implements ITransactionRepository {
     private final List<Transaction> store = new CopyOnWriteArrayList<>();
 
